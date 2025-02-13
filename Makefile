@@ -16,7 +16,7 @@ BIN_PATH := $(OUT_DIR)/$(BIN_NAME)
 
 SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
 OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-DEPS := $(patsubst %.o, %.d, $(OBJECTS))
+DEPS := $(patsubst %.o, %.d, $(OBJS))
 
 .PHONY: all
 all: build
@@ -33,6 +33,6 @@ $(BIN_PATH): $(OBJS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -o $@ -c $^
+	$(CC) $(CFLAGS) -o $@ -c $<
 
 -include $(DEPS)
