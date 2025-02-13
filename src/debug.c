@@ -3,7 +3,7 @@
 #include "common.h"
 #include "value.h"
 
-static uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
+uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
     uint32_t line = chunk->lines[offset];
     if (offset > 0 && chunk->lines[offset - 1] == line) {
         printf("     | ");
@@ -22,6 +22,9 @@ static uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
             printf("'\n");
             return offset;
         }
+        case OP_RETURN:
+            printf("return\n");
+            return offset;
         default:
             printf("unknown opcode %d\n", opcode);
             return offset;
@@ -34,4 +37,13 @@ void disassemble_chunk(const Chunk* chunk) {
 
     uint32_t offset = 0;
     while (offset < chunk->length) offset = disassemble_instr(chunk, offset);
+}
+
+void print_stack(const VM* vm) {
+    printf("Stack: ");
+    for (const Value* value = vm->stack; value < vm->stack_top; value++) {
+        if (value != vm->stack) printf(", ");
+        print_value(*value);
+    }
+    printf("\n");
 }
