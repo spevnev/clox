@@ -22,12 +22,13 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
             printf("'\n");
             return offset;
         }
-        case OP_RETURN:
-            printf("return\n");
-            return offset;
-        default:
-            printf("unknown opcode %d\n", opcode);
-            return offset;
+        case OP_ADD:      printf("add\n"); return offset;
+        case OP_SUBTRACT: printf("subtract\n"); return offset;
+        case OP_MULTIPLY: printf("multiply\n"); return offset;
+        case OP_DIVIDE:   printf("divide\n"); return offset;
+        case OP_NEGATE:   printf("negate\n"); return offset;
+        case OP_RETURN:   printf("return\n"); return offset;
+        default:          printf("unknown opcode %d\n", opcode); return offset;
     }
 }
 
