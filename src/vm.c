@@ -1,6 +1,7 @@
 #include "vm.h"
 #include <assert.h>
 #include "common.h"
+#include "compiler.h"
 #include "debug.h"
 #include "error.h"
 #include "value.h"
@@ -16,10 +17,9 @@ static Value stack_pop(VM* vm) {
 }
 
 static InterpretResult run(VM* vm) {
-    // Read macros
 #define READ_BYTE() (*vm->ip++)
 #define READ_CONST() (vm->chunk->constants.values[READ_BYTE()])
-    // Op macros
+
 #define BINARY_OP(op)             \
     do {                          \
         double b = stack_pop(vm); \
@@ -59,8 +59,10 @@ void init_vm(VM* vm) { vm->stack_top = vm->stack; }
 
 void free_vm(VM* vm) { (void) vm; }
 
-InterpretResult interpret(VM* vm, Chunk* chunk) {
-    vm->chunk = chunk;
-    vm->ip = chunk->code;
-    return run(vm);
+InterpretResult interpret(VM* vm, const char* source) {
+    compile(source);
+    // vm->chunk = chunk;
+    // vm->ip = chunk->code;
+    // return run(vm);
+    return RESULT_OK;
 }
