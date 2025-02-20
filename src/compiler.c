@@ -122,6 +122,7 @@ static void unary(Parser *p) {
     parse_precedence(p, PREC_UNARY);
 
     switch (op) {
+        case TOKEN_BANG:  emit_byte(p, OP_NOT); break;
         case TOKEN_MINUS: emit_byte(p, OP_NEGATE); break;
         default:          UNREACHABLE();
     }
@@ -133,11 +134,17 @@ static void binary(Parser *p) {
     parse_precedence(p, get_rule(op)->precedence + 1);
 
     switch (op) {
-        case TOKEN_PLUS:  emit_byte(p, OP_ADD); break;
-        case TOKEN_MINUS: emit_byte(p, OP_SUBTRACT); break;
-        case TOKEN_STAR:  emit_byte(p, OP_MULTIPLY); break;
-        case TOKEN_SLASH: emit_byte(p, OP_DIVIDE); break;
-        default:          UNREACHABLE();
+        case TOKEN_PLUS:          emit_byte(p, OP_ADD); break;
+        case TOKEN_MINUS:         emit_byte(p, OP_SUBTRACT); break;
+        case TOKEN_STAR:          emit_byte(p, OP_MULTIPLY); break;
+        case TOKEN_SLASH:         emit_byte(p, OP_DIVIDE); break;
+        case TOKEN_BANG_EQUAL:    emit_byte2(p, OP_EQUAL, OP_NOT); break;
+        case TOKEN_EQUAL_EQUAL:   emit_byte(p, OP_EQUAL); break;
+        case TOKEN_GREATER:       emit_byte(p, OP_GREATER); break;
+        case TOKEN_GREATER_EQUAL: emit_byte2(p, OP_LESS, OP_NOT); break;
+        case TOKEN_LESS:          emit_byte(p, OP_LESS); break;
+        case TOKEN_LESS_EQUAL:    emit_byte2(p, OP_GREATER, OP_NOT); break;
+        default:                  UNREACHABLE();
     }
 }
 
@@ -156,16 +163,23 @@ static void conditional(Parser *p) {
 static const ParseRule rules[TOKEN_COUNT] = {
     // clang-format off
     // token               prefix,   infix,       precedence
-    [TOKEN_NUMBER]     = { number,   NULL,        PREC_NONE        },
-    [TOKEN_NIL]        = { nil,      NULL,        PREC_NONE        },
-    [TOKEN_TRUE]       = { true_,    NULL,        PREC_NONE        },
-    [TOKEN_FALSE]      = { false_,   NULL,        PREC_NONE        },
-    [TOKEN_LEFT_PAREN] = { grouping, NULL,        PREC_NONE        },
-    [TOKEN_MINUS]      = { unary,    binary,      PREC_TERM        },
-    [TOKEN_PLUS]       = { NULL,     binary,      PREC_TERM        },
-    [TOKEN_SLASH]      = { NULL,     binary,      PREC_FACTOR      },
-    [TOKEN_STAR]       = { NULL,     binary,      PREC_FACTOR      },
-    [TOKEN_QUESTION]   = { NULL,     conditional, PREC_CONDITIONAL },
+    [TOKEN_NUMBER]        = { number,   NULL,        PREC_NONE        },
+    [TOKEN_NIL]           = { nil,      NULL,        PREC_NONE        },
+    [TOKEN_TRUE]          = { true_,    NULL,        PREC_NONE        },
+    [TOKEN_FALSE]         = { false_,   NULL,        PREC_NONE        },
+    [TOKEN_LEFT_PAREN]    = { grouping, NULL,        PREC_NONE        },
+    [TOKEN_BANG]          = { unary,    NULL,        PREC_NONE        },
+    [TOKEN_MINUS]         = { unary,    binary,      PREC_TERM        },
+    [TOKEN_PLUS]          = { NULL,     binary,      PREC_TERM        },
+    [TOKEN_SLASH]         = { NULL,     binary,      PREC_FACTOR      },
+    [TOKEN_STAR]          = { NULL,     binary,      PREC_FACTOR      },
+    [TOKEN_BANG_EQUAL]    = { NULL,     binary,      PREC_EQUALITY    },
+    [TOKEN_EQUAL_EQUAL]   = { NULL,     binary,      PREC_EQUALITY    },
+    [TOKEN_GREATER]       = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_GREATER_EQUAL] = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_LESS]          = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_LESS_EQUAL]    = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_QUESTION]      = { NULL,     conditional, PREC_CONDITIONAL },
     // clang-format on
 };
 

@@ -21,3 +21,21 @@ void print_value(Value value) {
         default:         UNREACHABLE();
     }
 }
+
+bool value_is_truthy(Value value) {
+    switch (value.type) {
+        case VAL_NIL:  return false;
+        case VAL_BOOL: return value.as.boolean;
+        default:       return true;
+    }
+}
+
+bool value_equals(Value a, Value b) {
+    if (a.type != b.type) return false;
+    switch (a.type) {
+        case VAL_NIL:    return true;
+        case VAL_BOOL:   return a.as.boolean == b.as.boolean;
+        case VAL_NUMBER: return a.as.number == b.as.number;
+        default:         UNREACHABLE();
+    }
+}

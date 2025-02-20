@@ -29,5 +29,7 @@ typedef struct {
 
 void values_push(ValueVec *vec, Value value);
 void print_value(Value value);
+bool value_is_truthy(Value value);
+bool value_equals(Value a, Value b);
 
 #endif  // CLOX_VALUE_H_

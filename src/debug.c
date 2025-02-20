@@ -13,7 +13,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
 
     printf("%04d    ", offset);
 
-    uint8_t opcode = chunk->code[offset++];
+    OpCode opcode = chunk->code[offset++];
     switch (opcode) {
         case OP_NIL:      printf("nil\n"); break;
         case OP_TRUE:     printf("true\n"); break;
@@ -25,10 +25,14 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
             printf("'\n");
             break;
         }
+        case OP_EQUAL:    printf("equal\n"); break;
+        case OP_GREATER:  printf("greater\n"); break;
+        case OP_LESS:     printf("less\n"); break;
         case OP_ADD:      printf("add\n"); break;
         case OP_SUBTRACT: printf("subtract\n"); break;
         case OP_MULTIPLY: printf("multiply\n"); break;
         case OP_DIVIDE:   printf("divide\n"); break;
+        case OP_NOT:      printf("not\n"); break;
         case OP_NEGATE:   printf("negate\n"); break;
         case OP_RETURN:   printf("return\n"); break;
         default:          printf("unknown opcode %d\n", opcode); break;

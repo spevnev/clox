@@ -32,7 +32,7 @@ static InterpretResult run(VM* vm) {
 #define BINARY_OP(value_type, op)                                                           \
     do {                                                                                    \
         if (stack_peek(vm, 0).type != VAL_NUMBER || stack_peek(vm, 1).type != VAL_NUMBER) { \
-            RUNTIME_ERROR(vm, "Operands must be numbers.");                                 \
+            RUNTIME_ERROR(vm, "Operands must be numbers");                                  \
             return RESULT_RUNTIME_ERROR;                                                    \
         }                                                                                   \
         double b = stack_pop(vm).as.number;                                                 \
@@ -54,13 +54,17 @@ static InterpretResult run(VM* vm) {
             case OP_TRUE:     stack_push(vm, VALUE_BOOL(true)); break;
             case OP_FALSE:    stack_push(vm, VALUE_BOOL(false)); break;
             case OP_CONSTANT: stack_push(vm, READ_CONST()); break;
+            case OP_EQUAL:    stack_push(vm, VALUE_BOOL(value_equals(stack_pop(vm), stack_pop(vm)))); break;
+            case OP_GREATER:  BINARY_OP(VALUE_BOOL, >); break;
+            case OP_LESS:     BINARY_OP(VALUE_BOOL, <); break;
             case OP_ADD:      BINARY_OP(VALUE_NUMBER, +); break;
             case OP_SUBTRACT: BINARY_OP(VALUE_NUMBER, -); break;
             case OP_MULTIPLY: BINARY_OP(VALUE_NUMBER, *); break;
             case OP_DIVIDE:   BINARY_OP(VALUE_NUMBER, /); break;
+            case OP_NOT:      stack_push(vm, VALUE_BOOL(!value_is_truthy(stack_pop(vm)))); break;
             case OP_NEGATE:
                 if (stack_peek(vm, 0).type != VAL_NUMBER) {
-                    RUNTIME_ERROR(vm, "Operand must be a number.");
+                    RUNTIME_ERROR(vm, "Operand must be a number");
                     return RESULT_RUNTIME_ERROR;
                 }
                 (vm->stack_top - 1)->as.number *= -1;
