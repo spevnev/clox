@@ -106,7 +106,10 @@ static void parse_precedence(Parser *p, Precedence precedence) {
 
 static void expression(Parser *p) { parse_precedence(p, PREC_ASSIGNMENT); }
 
-static void number(Parser *p) { emit_constant(p, strtod(p->previous.start, NULL)); }
+static void number(Parser *p) { emit_constant(p, VALUE_NUMBER(strtod(p->previous.start, NULL))); }
+static void nil(Parser *p) { emit_byte(p, OP_NIL); }
+static void true_(Parser *p) { emit_byte(p, OP_TRUE); }
+static void false_(Parser *p) { emit_byte(p, OP_FALSE); }
 
 static void grouping(Parser *p) {
     expression(p);
@@ -154,6 +157,9 @@ static const ParseRule rules[TOKEN_COUNT] = {
     // clang-format off
     // token               prefix,   infix,       precedence
     [TOKEN_NUMBER]     = { number,   NULL,        PREC_NONE        },
+    [TOKEN_NIL]        = { nil,      NULL,        PREC_NONE        },
+    [TOKEN_TRUE]       = { true_,    NULL,        PREC_NONE        },
+    [TOKEN_FALSE]      = { false_,   NULL,        PREC_NONE        },
     [TOKEN_LEFT_PAREN] = { grouping, NULL,        PREC_NONE        },
     [TOKEN_MINUS]      = { unary,    binary,      PREC_TERM        },
     [TOKEN_PLUS]       = { NULL,     binary,      PREC_TERM        },

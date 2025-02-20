@@ -15,6 +15,9 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
 
     uint8_t opcode = chunk->code[offset++];
     switch (opcode) {
+        case OP_NIL:      printf("nil\n"); break;
+        case OP_TRUE:     printf("true\n"); break;
+        case OP_FALSE:    printf("false\n"); break;
         case OP_CONSTANT: {
             uint32_t const_idx = chunk->code[offset++];
             printf("const %u '", const_idx);
