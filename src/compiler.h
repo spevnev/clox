@@ -1,6 +1,9 @@
 #ifndef CLOX_COMPILER_H_
 #define CLOX_COMPILER_H_
 
-void compile(const char *source);
+#include "chunk.h"
+#include "common.h"
+
+bool compile(const char *source, Chunk *chunk);
 
 #endif  // CLOX_COMPILER_H_

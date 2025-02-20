@@ -24,7 +24,7 @@ static bool is_digit(char c) { return '0' <= c && c <= '9'; }
 static bool is_alpha(char c) { return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'; }
 static bool is_alphanumeric(char c) { return is_alpha(c) || is_digit(c); }
 
-static int token_len(Lexer *l) { return l->current - l->start; }
+static int token_length(Lexer *l) { return l->current - l->start; }
 static bool is_done(Lexer *l) { return *l->current == '\0'; }
 static char peek(Lexer *l) { return *l->current; }
 static char peek_next(Lexer *l) { return *(l->current + 1); }
@@ -82,7 +82,7 @@ static Token number(Lexer *l) {
 }
 
 static TokenType check_keyword(Lexer *l, int offset, int length, const char *rest, TokenType type) {
-    if (token_len(l) == offset + length && memcmp(l->start + offset, rest, length) == 0) return type;
+    if (token_length(l) == offset + length && memcmp(l->start + offset, rest, length) == 0) return type;
     return TOKEN_IDENTIFIER;
 }
 
@@ -92,7 +92,7 @@ static TokenType get_identifier_type(Lexer *l) {
         case 'c': return check_keyword(l, 1, 4, "lass", TOKEN_CLASS);
         case 'e': return check_keyword(l, 1, 3, "lse", TOKEN_ELSE);
         case 'f':
-            if (token_len(l) > 1) {
+            if (token_length(l) > 1) {
                 switch (l->start[1]) {
                     case 'a': return check_keyword(l, 2, 3, "lse", TOKEN_FALSE);
                     case 'o': return check_keyword(l, 2, 1, "r", TOKEN_FOR);
@@ -107,7 +107,7 @@ static TokenType get_identifier_type(Lexer *l) {
         case 'r': return check_keyword(l, 1, 5, "eturn", TOKEN_RETURN);
         case 's': return check_keyword(l, 1, 4, "uper", TOKEN_SUPER);
         case 't':
-            if (token_len(l) > 1) {
+            if (token_length(l) > 1) {
                 switch (l->start[1]) {
                     case 'h': return check_keyword(l, 2, 2, "is", TOKEN_THIS);
                     case 'r': return check_keyword(l, 2, 2, "ue", TOKEN_TRUE);
@@ -143,12 +143,14 @@ Token next_token(Lexer *l) {
         case '{': return new_token(l, TOKEN_LEFT_BRACE);
         case '}': return new_token(l, TOKEN_RIGHT_BRACE);
         case ';': return new_token(l, TOKEN_SEMICOLON);
+        case ':': return new_token(l, TOKEN_COLON);
         case ',': return new_token(l, TOKEN_COMMA);
         case '.': return new_token(l, TOKEN_DOT);
         case '-': return new_token(l, TOKEN_MINUS);
         case '+': return new_token(l, TOKEN_PLUS);
         case '/': return new_token(l, TOKEN_SLASH);
         case '*': return new_token(l, TOKEN_STAR);
+        case '?': return new_token(l, TOKEN_QUESTION);
         case '!': return new_token(l, match(l, '=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
         case '=': return new_token(l, match(l, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
         case '<': return new_token(l, match(l, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);

@@ -11,19 +11,19 @@
 
 static char *read_entire_file(const char *path) {
     FILE *file = fopen(path, "rb");
-    if (file == NULL) ERROR("Unable to open file \"%s\": %s.", path, strerror(errno));
+    if (file == NULL) PANIC("Unable to open file \"%s\": %s", path, strerror(errno));
 
     fseek(file, 0L, SEEK_END);
     size_t size = ftell(file);
     fseek(file, 0L, SEEK_SET);
 
     char *buffer = malloc(size + 1);
-    if (buffer == NULL) ERROR("Not enough memory to read file \"%s\".", path);
+    if (buffer == NULL) PANIC("Not enough memory to read file \"%s\"", path);
 
     size_t bytes_read = fread(buffer, sizeof(char), size, file);
     if (bytes_read < size) {
         free(buffer);
-        ERROR("Unable to read file \"%s\": %s.", path, strerror(errno));
+        PANIC("Unable to read file \"%s\": %s", path, strerror(errno));
     }
     buffer[bytes_read] = '\0';
 
@@ -74,7 +74,7 @@ static int run_file(const char *path) {
         case RESULT_OK:            return EXIT_SUCCESS;
         case RESULT_COMPILE_ERROR: return EX_DATAERR;
         case RESULT_RUNTIME_ERROR: return EXIT_FAILURE;
-        default:                   ERROR("Invalid interpreter result type.");
+        default:                   UNREACHABLE();
     }
 }
 

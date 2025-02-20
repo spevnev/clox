@@ -14,8 +14,10 @@ typedef enum {
     TOKEN_MINUS,
     TOKEN_PLUS,
     TOKEN_SEMICOLON,
+    TOKEN_COLON,
     TOKEN_SLASH,
     TOKEN_STAR,
+    TOKEN_QUESTION,
     TOKEN_BANG,
     TOKEN_BANG_EQUAL,
     TOKEN_EQUAL,
@@ -50,7 +52,9 @@ typedef enum {
 
     // Special
     TOKEN_ERROR,
-    TOKEN_EOF
+    TOKEN_EOF,
+
+    TOKEN_COUNT
 } TokenType;
 
 typedef struct {

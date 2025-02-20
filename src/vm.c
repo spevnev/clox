@@ -1,5 +1,6 @@
 #include "vm.h"
 #include <assert.h>
+#include "chunk.h"
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
@@ -60,9 +61,16 @@ void init_vm(VM* vm) { vm->stack_top = vm->stack; }
 void free_vm(VM* vm) { (void) vm; }
 
 InterpretResult interpret(VM* vm, const char* source) {
-    compile(source);
-    // vm->chunk = chunk;
-    // vm->ip = chunk->code;
-    // return run(vm);
-    return RESULT_OK;
+    Chunk chunk = {0};
+    if (!compile(source, &chunk)) {
+        free_chunk(&chunk);
+        return RESULT_COMPILE_ERROR;
+    }
+
+    vm->chunk = &chunk;
+    vm->ip = chunk.code;
+    InterpretResult result = run(vm);
+
+    free_chunk(&chunk);
+    return result;
 }
