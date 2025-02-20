@@ -20,16 +20,17 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
             printf("const %u '", const_idx);
             print_value(chunk->constants.values[const_idx]);
             printf("'\n");
-            return offset;
+            break;
         }
-        case OP_ADD:      printf("add\n"); return offset;
-        case OP_SUBTRACT: printf("subtract\n"); return offset;
-        case OP_MULTIPLY: printf("multiply\n"); return offset;
-        case OP_DIVIDE:   printf("divide\n"); return offset;
-        case OP_NEGATE:   printf("negate\n"); return offset;
-        case OP_RETURN:   printf("return\n"); return offset;
-        default:          printf("unknown opcode %d\n", opcode); return offset;
+        case OP_ADD:      printf("add\n"); break;
+        case OP_SUBTRACT: printf("subtract\n"); break;
+        case OP_MULTIPLY: printf("multiply\n"); break;
+        case OP_DIVIDE:   printf("divide\n"); break;
+        case OP_NEGATE:   printf("negate\n"); break;
+        case OP_RETURN:   printf("return\n"); break;
+        default:          printf("unknown opcode %d\n", opcode); break;
     }
+    return offset;
 }
 
 void disassemble_chunk(const Chunk* chunk) {

@@ -48,6 +48,7 @@ static InterpretResult run(VM* vm) {
                 print_value(stack_pop(vm));
                 printf("\n");
                 return RESULT_OK;
+            default: UNREACHABLE();
         }
     }
 

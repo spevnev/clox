@@ -86,8 +86,6 @@ static void emit_byte2(Parser *p, uint8_t byte1, uint8_t byte2) {
 
 static void emit_constant(Parser *p, Value constant) { emit_byte2(p, OP_CONSTANT, new_constant(p, constant)); }
 
-static void emit_return(Parser *p) { emit_byte(p, OP_RETURN); }
-
 static void parse_precedence(Parser *p, Precedence precedence) {
     advance(p);
 
@@ -146,7 +144,8 @@ static void conditional(Parser *p) {
     parse_precedence(p, PREC_CONDITIONAL);
 
     // Temporary:
-    ERROR_AT(p->previous.line, "Conditional ternary operator is not implemented yet, for now it just sums all the results");
+    ERROR_AT(p->previous.line,
+             "Conditional ternary operator is not implemented yet, for now it just sums all the results");
     emit_byte(p, OP_ADD);
     emit_byte(p, OP_SUBTRACT);
 }
@@ -154,8 +153,8 @@ static void conditional(Parser *p) {
 static const ParseRule rules[TOKEN_COUNT] = {
     // clang-format off
     // token               prefix,   infix,       precedence
-    [TOKEN_LEFT_PAREN] = { grouping, NULL,        PREC_NONE        },
     [TOKEN_NUMBER]     = { number,   NULL,        PREC_NONE        },
+    [TOKEN_LEFT_PAREN] = { grouping, NULL,        PREC_NONE        },
     [TOKEN_MINUS]      = { unary,    binary,      PREC_TERM        },
     [TOKEN_PLUS]       = { NULL,     binary,      PREC_TERM        },
     [TOKEN_SLASH]      = { NULL,     binary,      PREC_FACTOR      },
@@ -178,7 +177,7 @@ bool compile(const char *source, Chunk *chunk) {
     advance(&parser);
     expression(&parser);
     expect(&parser, TOKEN_EOF, "Expected end of expressions");
-    emit_return(&parser);
+    emit_byte(&parser, OP_RETURN);
 
 #ifdef DEBUG_PRINT_BYTECODE
     if (!parser.had_error) disassemble_chunk(current_chunk(&parser));
