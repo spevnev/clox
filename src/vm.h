@@ -19,8 +19,7 @@ typedef struct {
     Value stack[STACK_SIZE];
     Value* stack_top;
     Object* objects;
-    // Set of interned strings (values are always null).
-    HashMap strings;
+    HashMap strings;  // Set of interned strings (values are always null).
 } VM;
 
 extern VM vm;

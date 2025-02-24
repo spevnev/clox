@@ -51,12 +51,15 @@ static void error(uint32_t line, const char *message) {
     ERROR_AT(line, message);
 }
 
-static void advance() {
+static void error_previous(const char *message) { error(p.previous.line, message); }
+static void error_current(const char *message) { error(p.current.line, message); }
+
+static void advance(void) {
     p.previous = p.current;
     for (;;) {
         p.current = next_token(p.lexer);
         if (p.current.type != TOKEN_ERROR) break;
-        error(p.current.line, p.current.start);
+        error_current(p.current.start);
     }
 }
 
@@ -64,16 +67,16 @@ static void expect(TokenType type, const char *error_message) {
     if (p.current.type == type) {
         advance();
     } else {
-        error(p.current.line, error_message);
+        error_current(error_message);
     }
 }
 
-static Chunk *current_chunk() { return p.chunk; }
+static Chunk *current_chunk(void) { return p.chunk; }
 
 static uint8_t new_constant(Value constant) {
     uint32_t index = push_constant(current_chunk(), constant);
     if (index > UINT8_MAX) {
-        error(p.previous.line, "Too many constants in one chunk");
+        error_previous("Too many constants in one chunk");
         return 0;
     }
 
@@ -94,7 +97,7 @@ static void parse_precedence(Precedence precedence) {
 
     ParseFn prefix_rule = get_rule(p.previous.type)->prefix;
     if (prefix_rule == NULL) {
-        error(p.previous.line, "Expected expression");
+        error_previous("Expected expression");
         return;
     }
 
@@ -107,7 +110,7 @@ static void parse_precedence(Precedence precedence) {
     }
 }
 
-static void expression() { parse_precedence(PREC_ASSIGNMENT); }
+static void expression(void) { parse_precedence(PREC_ASSIGNMENT); }
 
 static void nil() { emit_byte(OP_NIL); }
 static void true_() { emit_byte(OP_TRUE); }
@@ -154,14 +157,13 @@ static void binary() {
 
 static void conditional() {
     parse_precedence(PREC_ASSIGNMENT);
-    expect(TOKEN_COLON, "Expected ':' after after the then branch of conditional (ternary) operator");
+    expect(TOKEN_COLON, "Expected ':' after then branch of conditional (ternary) operator");
     parse_precedence(PREC_CONDITIONAL);
 
     // Temporary:
-    ERROR_AT(p.previous.line,
-             "Conditional ternary operator is not implemented yet, for now it just sums all the results");
+    ERROR_AT(p.previous.line, "Conditional ternary operator is not implemented yet, for now it just sums all operands");
     emit_byte(OP_ADD);
-    emit_byte(OP_SUBTRACT);
+    emit_byte(OP_ADD);
 }
 
 static const ParseRule rules[TOKEN_COUNT] = {

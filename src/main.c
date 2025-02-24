@@ -37,7 +37,7 @@ static void usage(const char *program) {
     fprintf(stderr, "  %s <path> - run file\n", program);
 }
 
-static void run_repl() {
+static void run_repl(void) {
     init_vm();
 
     size_t size;

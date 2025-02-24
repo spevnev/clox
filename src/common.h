@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define DEBUG_PRINT_BYTECODE
-#define DEBUG_TRACE_INSTR
-#define DEBUG_TRACE_STACK
+// #define DEBUG_PRINT_BYTECODE
+// #define DEBUG_TRACE_INSTR
+// #define DEBUG_TRACE_STACK
 
 #endif  // CLOX_COMMON_H_

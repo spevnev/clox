@@ -26,11 +26,11 @@ static bool is_digit(char c) { return '0' <= c && c <= '9'; }
 static bool is_alpha(char c) { return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'; }
 static bool is_alphanumeric(char c) { return is_alpha(c) || is_digit(c); }
 
-static int token_length() { return l.current - l.start; }
-static bool is_done() { return *l.current == '\0'; }
-static char peek() { return *l.current; }
-static char peek_next() { return *(l.current + 1); }
-static char advance() { return *(l.current++); }
+static int token_length(void) { return l.current - l.start; }
+static bool is_done(void) { return *l.current == '\0'; }
+static char peek(void) { return *l.current; }
+static char peek_next(void) { return *(l.current + 1); }
+static char advance(void) { return *(l.current++); }
 
 static bool match(char c) {
     if (is_done() || *l.current != c) return false;
@@ -38,7 +38,7 @@ static bool match(char c) {
     return true;
 }
 
-static void skip_whitespace() {
+static void skip_whitespace(void) {
     for (;;) {
         switch (peek()) {
             case ' ':
@@ -60,7 +60,7 @@ static void skip_whitespace() {
     }
 }
 
-static Token string() {
+static Token string(void) {
     while (!is_done() && peek() != '"') {
         if (peek() == '\n') l.line++;
         advance();
@@ -73,7 +73,7 @@ static Token string() {
     }
 }
 
-static Token number() {
+static Token number(void) {
     while (is_digit(peek())) advance();
     if (peek() == '.' && is_digit(peek_next())) {
         advance();  // Consume the dot
@@ -88,7 +88,7 @@ static TokenType check_keyword(int offset, int length, const char *rest, TokenTy
     return TOKEN_IDENTIFIER;
 }
 
-static TokenType get_identifier_type() {
+static TokenType get_identifier_type(void) {
     switch (l.start[0]) {
         case 'a': return check_keyword(1, 2, "nd", TOKEN_AND);
         case 'c': return check_keyword(1, 4, "lass", TOKEN_CLASS);
@@ -122,7 +122,7 @@ static TokenType get_identifier_type() {
     return TOKEN_IDENTIFIER;
 }
 
-static Token identifier() {
+static Token identifier(void) {
     while (is_alphanumeric(peek())) advance();
     return new_token(get_identifier_type());
 }
@@ -132,7 +132,7 @@ void init_lexer(const char *source) {
     l.line = 1;
 }
 
-Token next_token() {
+Token next_token(void) {
     skip_whitespace();
 
     l.start = l.current;
