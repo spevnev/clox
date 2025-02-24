@@ -39,6 +39,9 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_NOT:           INSTR("not"); break;
         case OP_NEGATE:        INSTR("negate"); break;
         case OP_PRINT:         INSTR("print"); break;
+        case OP_DEFINE_GLOBAL: CONST_INSTR("define global"); break;
+        case OP_GET_GLOBAL:    CONST_INSTR("get global"); break;
+        case OP_SET_GLOBAL:    CONST_INSTR("set global"); break;
         case OP_RETURN:        INSTR("return"); break;
         default:               printf("unknown opcode %d\n", opcode); break;
     }

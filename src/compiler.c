@@ -7,6 +7,8 @@
 #include "lexer.h"
 #include "object.h"
 
+#define UNUSED(parameter) __attribute__((unused)) UNUSED_##parameter
+
 typedef enum {
     PREC_NONE = 0,
     PREC_ASSIGNMENT,   // =
@@ -32,7 +34,7 @@ typedef struct {
     Token current;
 } Parser;
 
-typedef void (*ParseFn)();
+typedef void (*ParseFn)(bool can_assign);
 
 typedef struct {
     ParseFn prefix;
@@ -89,6 +91,10 @@ static uint8_t new_constant(Value constant) {
     return index;
 }
 
+static uint8_t identifier_constant(Token token) {
+    return new_constant(VALUE_OBJECT(copy_string(token.start, token.length)));
+}
+
 static void emit_byte(uint8_t byte) { push_byte(current_chunk(), byte, p.previous.line); }
 
 static void emit_byte2(uint8_t byte1, uint8_t byte2) {
@@ -107,29 +113,45 @@ static void parse_precedence(Precedence precedence) {
         return;
     }
 
-    prefix_rule();
+    bool can_assign = precedence <= PREC_ASSIGNMENT;
+    prefix_rule(can_assign);
 
     while (precedence <= get_rule(p.current.type)->precedence) {
         advance();
         ParseFn infix_rule = get_rule(p.previous.type)->infix;
-        infix_rule();
+        infix_rule(can_assign);
     }
+
+    if (can_assign && match(TOKEN_EQUAL)) error_current("Invalid assignment target");
 }
 
 static void expression(void) { parse_precedence(PREC_ASSIGNMENT); }
 
-static void nil() { emit_byte(OP_NIL); }
-static void true_() { emit_byte(OP_TRUE); }
-static void false_() { emit_byte(OP_FALSE); }
-static void number() { emit_constant(VALUE_NUMBER(strtod(p.previous.start, NULL))); }
-static void string() { emit_constant(VALUE_OBJECT(copy_string(p.previous.start + 1, p.previous.length - 2))); }
+static void named_variable(Token token, bool can_assign) {
+    uint8_t name = identifier_constant(token);
+    if (can_assign && match(TOKEN_EQUAL)) {
+        expression();
+        emit_byte2(OP_SET_GLOBAL, name);
+    } else {
+        emit_byte2(OP_GET_GLOBAL, name);
+    }
+}
 
-static void grouping() {
+static void nil(bool UNUSED(can_assign)) { emit_byte(OP_NIL); }
+static void true_(bool UNUSED(can_assign)) { emit_byte(OP_TRUE); }
+static void false_(bool UNUSED(can_assign)) { emit_byte(OP_FALSE); }
+static void number(bool UNUSED(can_assign)) { emit_constant(VALUE_NUMBER(strtod(p.previous.start, NULL))); }
+static void string(bool UNUSED(can_assign)) {
+    emit_constant(VALUE_OBJECT(copy_string(p.previous.start + 1, p.previous.length - 2)));
+}
+static void variable(bool can_assign) { named_variable(p.previous, can_assign); }
+
+static void grouping(bool UNUSED(can_assign)) {
     expression();
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after expression");
 }
 
-static void unary() {
+static void unary(bool UNUSED(can_assign)) {
     TokenType op = p.previous.type;
 
     parse_precedence(PREC_UNARY);
@@ -141,7 +163,7 @@ static void unary() {
     }
 }
 
-static void binary() {
+static void binary(bool UNUSED(can_assign)) {
     TokenType op = p.previous.type;
 
     parse_precedence(get_rule(op)->precedence + 1);
@@ -161,7 +183,7 @@ static void binary() {
     }
 }
 
-static void conditional() {
+static void conditional(bool UNUSED(can_assign)) {
     parse_precedence(PREC_ASSIGNMENT);
     expect(TOKEN_COLON, "Expected ':' after then branch of conditional (ternary) operator");
     parse_precedence(PREC_CONDITIONAL);
@@ -180,6 +202,7 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_FALSE]         = { false_,   NULL,        PREC_NONE        },
     [TOKEN_NUMBER]        = { number,   NULL,        PREC_NONE        },
     [TOKEN_STRING]        = { string,   NULL,        PREC_NONE        },
+    [TOKEN_IDENTIFIER]    = { variable, NULL,        PREC_NONE        },
     [TOKEN_LEFT_PAREN]    = { grouping, NULL,        PREC_NONE        },
     [TOKEN_BANG]          = { unary,    NULL,        PREC_NONE        },
     [TOKEN_MINUS]         = { unary,    binary,      PREC_TERM        },
@@ -240,8 +263,29 @@ static void statement(void) {
     }
 }
 
+static uint8_t var_name(const char *error_message) {
+    expect(TOKEN_IDENTIFIER, error_message);
+    return identifier_constant(p.previous);
+}
+
+static void var_decl(void) {
+    advance();
+    uint8_t global = var_name("Expected variable name after 'var'");
+
+    if (match(TOKEN_EQUAL)) {
+        expression();
+    } else {
+        // Value is implicitly nil.
+        emit_byte(OP_NIL);
+    }
+    expect(TOKEN_SEMICOLON, "Expected ';' after variable declaration");
+
+    emit_byte2(OP_DEFINE_GLOBAL, global);
+}
+
 static void declaration(void) {
     switch (p.current.type) {
+        case TOKEN_VAR: var_decl(); break;
         default:        statement(); break;
     }
     if (p.is_panicking) synchronize();

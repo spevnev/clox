@@ -39,6 +39,7 @@ static Value stack_peek(int distance) {
 static InterpretResult run(void) {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONST() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_STRING() ((ObjString*) READ_CONST().as.object)
 
 #define BINARY_OP(value_type, op)                                                   \
     do {                                                                            \
@@ -96,6 +97,31 @@ static InterpretResult run(void) {
                 print_value(stack_pop());
                 printf("\n");
                 break;
+            case OP_DEFINE_GLOBAL: {
+                ObjString* name = READ_STRING();
+                hashmap_set(&vm.globals, name, stack_peek(0));
+                // Pop is performed after adding to hashmap to prevent GC from
+                // freeing the value after pop but before set.
+                stack_pop();
+            } break;
+            case OP_GET_GLOBAL: {
+                ObjString* name = READ_STRING();
+                Value value;
+                if (!hashmap_get(&vm.globals, name, &value)) {
+                    RUNTIME_ERROR("Undefined variable '%s'", name->cstr);
+                    return RESULT_RUNTIME_ERROR;
+                }
+                stack_push(value);
+            } break;
+            case OP_SET_GLOBAL: {
+                ObjString* name = READ_STRING();
+                // Set doesn't pop since assignment expression should evaluate to the RHS.
+                if (hashmap_set(&vm.globals, name, stack_peek(0))) {
+                    hashmap_delete(&vm.globals, name);
+                    RUNTIME_ERROR("Undefined variable '%s'", name->cstr);
+                    return RESULT_RUNTIME_ERROR;
+                }
+            } break;
             case OP_RETURN: return RESULT_OK;
             default:        UNREACHABLE();
         }
@@ -103,6 +129,7 @@ static InterpretResult run(void) {
 
 #undef READ_BYTE
 #undef READ_CONST
+#undef READ_STRING
 #undef BINARY_OP
 }
 
@@ -116,6 +143,7 @@ void free_vm(void) {
         current = next;
     }
     free_hashmap(&vm.strings);
+    free_hashmap(&vm.globals);
 }
 
 InterpretResult interpret(const char* source) {
