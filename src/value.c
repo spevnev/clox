@@ -38,11 +38,7 @@ bool value_equals(Value a, Value b) {
         case VAL_NIL:    return true;
         case VAL_BOOL:   return a.as.boolean == b.as.boolean;
         case VAL_NUMBER: return a.as.number == b.as.number;
-        case VAL_OBJECT: {
-            const ObjString *str_a = (ObjString *) a.as.object;
-            const ObjString *str_b = (ObjString *) b.as.object;
-            return str_a->length == str_b->length && memcmp(str_a->cstr, str_b->cstr, str_a->length) == 0;
-        }
-        default: UNREACHABLE();
+        case VAL_OBJECT: return a.as.object == b.as.object;
+        default:         UNREACHABLE();
     }
 }

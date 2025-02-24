@@ -2,6 +2,7 @@
 #include <string.h>
 #include "common.h"
 #include "error.h"
+#include "hashmap.h"
 #include "memory.h"
 #include "vm.h"
 
@@ -28,19 +29,36 @@ void print_object(const Object *object) {
 }
 
 ObjString *copy_string(const char *cstr, uint32_t length) {
+    uint32_t hash = hash_string(cstr, length);
+    ObjString *interned_string = hashmap_find_key(&vm.strings, cstr, length, hash);
+    if (interned_string != NULL) return interned_string;
+
     ObjString *string = (ObjString *) new_object(OBJ_STRING, sizeof(ObjString) + length + 1);
+    string->hash = hash;
     memcpy(string->cstr, cstr, length);
     string->cstr[length] = '\0';
     string->length = length;
+
+    hashmap_set(&vm.strings, string, VALUE_NIL());
     return string;
 }
 
 ObjString *concat_strings(const ObjString *a, const ObjString *b) {
     uint32_t new_length = a->length + b->length;
-    ObjString *string = (ObjString *) new_object(OBJ_STRING, sizeof(ObjString) + new_length + 1);
+    uint32_t size = sizeof(ObjString) + new_length + 1;
+
+    ObjString *string = (ObjString *) new_object(OBJ_STRING, size);
     memcpy(string->cstr, a->cstr, a->length);
     memcpy(string->cstr + a->length, b->cstr, b->length);
     string->cstr[new_length] = '\0';
     string->length = new_length;
+    string->hash = hash_string(string->cstr, string->length);
+
+    ObjString *interned_string = hashmap_find_key(&vm.strings, string->cstr, string->length, string->hash);
+    if (interned_string != NULL) {
+        reallocate(string, size, 0);
+        return interned_string;
+    }
+
     return string;
 }

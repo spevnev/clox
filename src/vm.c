@@ -113,6 +113,7 @@ void free_vm() {
         free_object(current);
         current = next;
     }
+    free_hashmap(&vm.strings);
 }
 
 InterpretResult interpret(const char* source) {

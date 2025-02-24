@@ -2,6 +2,7 @@
 #define CLOX_VM_H_
 
 #include "chunk.h"
+#include "hashmap.h"
 #include "value.h"
 
 typedef enum {
@@ -18,6 +19,8 @@ typedef struct {
     Value stack[STACK_SIZE];
     Value* stack_top;
     Object* objects;
+    // Set of interned strings (values are always null).
+    HashMap strings;
 } VM;
 
 extern VM vm;

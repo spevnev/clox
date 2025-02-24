@@ -14,6 +14,7 @@ typedef struct Object {
 
 typedef struct {
     Object object;
+    uint32_t hash;
     uint32_t length;
     char cstr[];
 } ObjString;
