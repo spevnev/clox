@@ -47,12 +47,3 @@ void disassemble_chunk(const Chunk* chunk) {
     uint32_t offset = 0;
     while (offset < chunk->length) offset = disassemble_instr(chunk, offset);
 }
-
-void print_stack(const VM* vm) {
-    printf("Stack: ");
-    for (const Value* value = vm->stack; value < vm->stack_top; value++) {
-        if (value != vm->stack) printf(", ");
-        print_value(*value);
-    }
-    printf("\n");
-}

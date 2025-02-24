@@ -70,7 +70,7 @@ typedef struct {
     uint32_t line;
 } Lexer;
 
-void init_lexer(Lexer *l, const char *source);
-Token next_token(Lexer *l);
+void init_lexer(const char *source);
+Token next_token();
 
 #endif  // CLOX_LEXER_H_

@@ -15,13 +15,15 @@ typedef enum {
 typedef struct {
     Chunk* chunk;
     uint8_t* ip;
-
     Value stack[STACK_SIZE];
     Value* stack_top;
+    Object* objects;
 } VM;
 
-void init_vm(VM* vm);
-void free_vm(VM* vm);
-InterpretResult interpret(VM* vm, const char* source);
+extern VM vm;
+
+void init_vm();
+void free_vm();
+InterpretResult interpret(const char* source);
 
 #endif  // CLOX_VM_H_

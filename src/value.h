@@ -2,11 +2,13 @@
 #define CLOX_VALUE_H_
 
 #include "common.h"
+#include "object.h"
 
 typedef enum {
     VAL_NIL,
     VAL_BOOL,
     VAL_NUMBER,
+    VAL_OBJECT,
 } ValueType;
 
 typedef struct {
@@ -14,18 +16,24 @@ typedef struct {
     union {
         bool boolean;
         double number;
+        Object *object;
     } as;
 } Value;
-
-#define VALUE_NIL() ((Value) {.type = VAL_NIL})
-#define VALUE_BOOL(value) ((Value) {.type = VAL_BOOL, .as.boolean = (value)})
-#define VALUE_NUMBER(value) ((Value) {.type = VAL_NUMBER, .as.number = (value)})
 
 typedef struct {
     uint32_t capacity;
     uint32_t length;
     Value *values;
 } ValueVec;
+
+#define VALUE_NIL() ((Value) {.type = VAL_NIL})
+#define VALUE_BOOL(value) ((Value) {.type = VAL_BOOL, .as.boolean = (value)})
+#define VALUE_NUMBER(value) ((Value) {.type = VAL_NUMBER, .as.number = (value)})
+#define VALUE_OBJECT(value) ((Value) {.type = VAL_OBJECT, .as.object = (Object *) (value)})
+
+static inline bool is_object_type(Value value, ObjectType type) {
+    return value.type == VAL_OBJECT && value.as.object->type == type;
+}
 
 void values_push(ValueVec *vec, Value value);
 void print_value(Value value);

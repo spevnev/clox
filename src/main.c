@@ -38,8 +38,7 @@ static void usage(const char *program) {
 }
 
 static void run_repl() {
-    VM vm = {0};
-    init_vm(&vm);
+    init_vm();
 
     size_t size;
     char *line = NULL;
@@ -52,23 +51,21 @@ static void run_repl() {
             break;
         }
 
-        interpret(&vm, line);
+        interpret(line);
     }
 
-    free_vm(&vm);
+    free_vm();
     free(line);
 }
 
 static int run_file(const char *path) {
     char *source = read_entire_file(path);
 
-    VM vm = {0};
-    init_vm(&vm);
-
-    InterpretResult result = interpret(&vm, source);
+    init_vm();
+    InterpretResult result = interpret(source);
+    free_vm();
 
     free(source);
-    free_vm(&vm);
 
     switch (result) {
         case RESULT_OK:            return EXIT_SUCCESS;
