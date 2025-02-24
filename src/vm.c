@@ -32,6 +32,7 @@ static Value stack_pop() {
 
 static Value stack_peek(int distance) {
     assert(distance >= 0 && "Peek distance must be non-negative");
+    assert(distance < vm.stack_top - vm.stack && "Peek distance points outside of stack");
     return *(vm.stack_top - 1 - distance);
 }
 

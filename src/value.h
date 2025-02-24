@@ -5,7 +5,7 @@
 #include "object.h"
 
 typedef enum {
-    VAL_NIL,
+    VAL_NIL = 0,
     VAL_BOOL,
     VAL_NUMBER,
     VAL_OBJECT,
