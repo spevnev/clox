@@ -28,6 +28,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_TRUE:          INSTR("true"); break;
         case OP_FALSE:         INSTR("false"); break;
         case OP_CONSTANT:      CONST_INSTR("const"); break;
+        case OP_POP:           INSTR("pop"); break;
         case OP_EQUAL:         INSTR("equal"); break;
         case OP_GREATER:       INSTR("greater"); break;
         case OP_LESS:          INSTR("less"); break;
@@ -37,6 +38,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_DIVIDE:        INSTR("divide"); break;
         case OP_NOT:           INSTR("not"); break;
         case OP_NEGATE:        INSTR("negate"); break;
+        case OP_PRINT:         INSTR("print"); break;
         case OP_RETURN:        INSTR("return"); break;
         default:               printf("unknown opcode %d\n", opcode); break;
     }

@@ -65,6 +65,7 @@ static InterpretResult run(void) {
             case OP_TRUE:     stack_push(VALUE_BOOL(true)); break;
             case OP_FALSE:    stack_push(VALUE_BOOL(false)); break;
             case OP_CONSTANT: stack_push(READ_CONST()); break;
+            case OP_POP:      stack_pop(); break;
             case OP_EQUAL:    stack_push(VALUE_BOOL(value_equals(stack_pop(), stack_pop()))); break;
             case OP_GREATER:  BINARY_OP(VALUE_BOOL, >); break;
             case OP_LESS:     BINARY_OP(VALUE_BOOL, <); break;
@@ -91,11 +92,12 @@ static InterpretResult run(void) {
                 }
                 (vm.stack_top - 1)->as.number *= -1;
                 break;
-            case OP_RETURN:
-                print_value(stack_pop(vm));
+            case OP_PRINT:
+                print_value(stack_pop());
                 printf("\n");
-                return RESULT_OK;
-            default: UNREACHABLE();
+                break;
+            case OP_RETURN: return RESULT_OK;
+            default:        UNREACHABLE();
         }
     }
 

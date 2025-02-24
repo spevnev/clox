@@ -71,6 +71,12 @@ static void expect(TokenType type, const char *error_message) {
     }
 }
 
+static bool match(TokenType type) {
+    if (p.current.type != type) return false;
+    advance();
+    return true;
+}
+
 static Chunk *current_chunk(void) { return p.chunk; }
 
 static uint8_t new_constant(Value constant) {
@@ -192,14 +198,62 @@ static const ParseRule rules[TOKEN_COUNT] = {
 
 static const ParseRule *get_rule(TokenType op) { return &rules[op]; }
 
+// Skip tokens until the statement boundary, either semicolon or one of the keywords
+// that begin statement, to continue parsing and report multiple errors at once.
+static void synchronize(void) {
+    p.is_panicking = false;
+
+    while (p.current.type != TOKEN_EOF) {
+        if (p.previous.type == TOKEN_SEMICOLON) return;
+
+        switch (p.current.type) {
+            case TOKEN_CLASS:
+            case TOKEN_FUN:
+            case TOKEN_VAR:
+            case TOKEN_FOR:
+            case TOKEN_IF:
+            case TOKEN_WHILE:
+            case TOKEN_PRINT:
+            case TOKEN_RETURN: return;
+            default:           advance(); break;
+        }
+    }
+}
+
+static void expression_stmt(void) {
+    expression();
+    expect(TOKEN_SEMICOLON, "Expected ';' after expression statement");
+    emit_byte(OP_POP);
+}
+
+static void print_stmt(void) {
+    advance();
+    expression();
+    expect(TOKEN_SEMICOLON, "Expected ';' after print statement");
+    emit_byte(OP_PRINT);
+}
+
+static void statement(void) {
+    switch (p.current.type) {
+        case TOKEN_PRINT: print_stmt(); break;
+        default:          expression_stmt(); break;
+    }
+}
+
+static void declaration(void) {
+    switch (p.current.type) {
+        default:        statement(); break;
+    }
+    if (p.is_panicking) synchronize();
+}
+
 bool compile(const char *source, Chunk *chunk) {
     init_lexer(source);
 
     p.chunk = chunk;
 
     advance();
-    expression();
-    expect(TOKEN_EOF, "Expected end of expressions");
+    while (!match(TOKEN_EOF)) declaration();
     emit_byte(OP_RETURN);
 
 #ifdef DEBUG_PRINT_BYTECODE
