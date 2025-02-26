@@ -58,6 +58,7 @@ static Compiler *c = NULL;
 static const ParseRule *get_rule(TokenType op);
 static void statement(void);
 static void declaration(void);
+static void var_decl(void);
 
 #define ERROR(line, ...)                 \
     do {                                 \
@@ -124,15 +125,24 @@ static void emit_constant(Value constant) { emit_byte2(OP_CONSTANT, new_constant
 static uint32_t emit_jump(uint8_t jump_op) {
     emit_byte(jump_op);
     uint32_t operand_offset = current_chunk()->length;
-    emit_byte2(0xFF, 0xFF);  // 16-bit operand
+    emit_byte2(0xFF, 0xFF);
     return operand_offset;
 }
 
 static void patch_jump(uint32_t offset) {
     // -2 adjusts for the 16-bit jump operand that is already skipped.
     uint32_t jump = current_chunk()->length - offset - 2;
-    if (jump > UINT16_MAX) ERROR_AT(current_chunk()->lines[offset], "Jump is too big");
+    if (jump > UINT16_MAX) ERROR_AT(current_chunk()->lines[offset], "Jump target is too far");
     memcpy(current_chunk()->code + offset, &jump, sizeof(uint16_t));
+}
+
+// Emits a loop (jump back) instruction that goes back to `loop_start`.
+static void emit_loop(uint32_t loop_start) {
+    emit_byte(OP_LOOP);
+    // 2 adjusts for the loop instruction and its operand.
+    uint32_t offset = current_chunk()->length + 2 - loop_start;
+    if (offset > UINT16_MAX) ERROR_AT(current_chunk()->lines[offset], "Loop body is too big");
+    emit_byte2(offset & 0xFF, (offset >> 8) & 0xFF);
 }
 
 static void parse_precedence(Precedence precedence) {
@@ -262,13 +272,13 @@ static void or_(bool UNUSED(can_assign)) {
 
 static void conditional(bool UNUSED(can_assign)) {
     uint32_t jump_over_then = emit_jump(OP_JUMP_IF_FALSE);
-    emit_byte(OP_POP);  // pop the result of condition
+    emit_byte(OP_POP);
     parse_precedence(PREC_ASSIGNMENT);
     uint32_t jump_over_else = emit_jump(OP_JUMP);
 
     expect(TOKEN_COLON, "Expected ':' after then branch of conditional (ternary) operator");
     patch_jump(jump_over_then);
-    emit_byte(OP_POP);  // pop the result of condition
+    emit_byte(OP_POP);
     parse_precedence(PREC_CONDITIONAL);
     patch_jump(jump_over_else);
 }
@@ -399,15 +409,84 @@ static void if_stmt(void) {
 
     uint32_t jump_over_then = emit_jump(OP_JUMP_IF_FALSE);
 
-    emit_byte(OP_POP);  // pop the result of condition
+    emit_byte(OP_POP);
     statement();
     uint32_t jump_over_else = emit_jump(OP_JUMP);
 
     patch_jump(jump_over_then);
-    emit_byte(OP_POP);  // pop the result of condition
+    emit_byte(OP_POP);
     if (match(TOKEN_ELSE)) statement();
 
     patch_jump(jump_over_else);
+}
+
+static void while_stmt(void) {
+    uint32_t loop_start = current_chunk()->length;
+
+    advance();
+    expect(TOKEN_LEFT_PAREN, "Expected '(' after 'while'");
+    expression();
+    expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after condition");
+
+    uint32_t exit_jump = emit_jump(OP_JUMP_IF_FALSE);
+    emit_byte(OP_POP);
+
+    statement();
+    emit_loop(loop_start);
+
+    patch_jump(exit_jump);
+    emit_byte(OP_POP);
+}
+
+static void for_stmt(void) {
+    begin_scope();
+
+    advance();
+    expect(TOKEN_LEFT_PAREN, "Expected '(' after 'for'");
+
+    if (is_next(TOKEN_VAR)) {
+        var_decl();
+    } else if (!match(TOKEN_SEMICOLON)) {
+        expression();
+        emit_byte(OP_POP);
+        expect(TOKEN_SEMICOLON, "Expected ';' after initializer clause of 'for'");
+    }
+
+    uint32_t loop_start = current_chunk()->length;
+    uint32_t exit_jump = 0;
+    if (!match(TOKEN_SEMICOLON)) {
+        expression();
+        expect(TOKEN_SEMICOLON, "Expected ';' after condition clause of 'for'");
+
+        exit_jump = emit_jump(OP_JUMP_IF_FALSE);
+        emit_byte(OP_POP);
+    }
+
+    if (!match(TOKEN_RIGHT_PAREN)) {
+        // If the loop has update clause, then we skip it after condition clause
+        // using body_jump and then return by changing loop_start to point here.
+        uint32_t body_jump = emit_jump(OP_JUMP);
+
+        uint32_t update_start = current_chunk()->length;
+        expression();
+        emit_byte(OP_POP);
+        expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after for loop's clauses");
+
+        emit_loop(loop_start);
+        loop_start = update_start;
+
+        patch_jump(body_jump);
+    }
+
+    statement();
+    emit_loop(loop_start);
+
+    if (exit_jump != 0) {
+        patch_jump(exit_jump);
+        emit_byte(OP_POP);
+    }
+
+    end_scope();
 }
 
 static void statement(void) {
@@ -419,6 +498,8 @@ static void statement(void) {
             break;
         case TOKEN_PRINT: print_stmt(); break;
         case TOKEN_IF:    if_stmt(); break;
+        case TOKEN_WHILE: while_stmt(); break;
+        case TOKEN_FOR:   for_stmt(); break;
         default:          expression_stmt(); break;
     }
 }

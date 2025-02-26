@@ -6,11 +6,11 @@
 uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
 #define INSTR(instr) printf(instr "\n")
 #define U8_INSTR(instr) printf(instr " %u\n", chunk->code[offset++]);
-#define JUMP_INSTR(instr)                                                         \
-    do {                                                                          \
-        offset += 2;                                                              \
-        uint16_t jump = chunk->code[offset - 2] | (chunk->code[offset - 1] << 8); \
-        printf(instr " %u -> %04u\n", jump, offset + jump);                       \
+#define JUMP_INSTR(instr)                                                            \
+    do {                                                                             \
+        uint16_t jump_offset = chunk->code[offset] | (chunk->code[offset + 1] << 8); \
+        offset += 2;                                                                 \
+        printf(instr " %u -> %04u\n", jump_offset, offset + jump_offset);            \
     } while (0)
 #define CONST_INSTR(instr)                               \
     do {                                                 \
@@ -54,8 +54,13 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_JUMP:          JUMP_INSTR("jump"); break;
         case OP_JUMP_IF_FALSE: JUMP_INSTR("jump if false"); break;
         case OP_JUMP_IF_TRUE:  JUMP_INSTR("jump if true"); break;
-        case OP_RETURN:        INSTR("return"); break;
-        default:               printf("unknown opcode %d\n", opcode); break;
+        case OP_LOOP:          {
+            uint16_t loop_offset = chunk->code[offset] | (chunk->code[offset + 1] << 8);
+            offset += 2;
+            printf("loop %u -> %04u\n", loop_offset, offset - loop_offset);
+        } break;
+        case OP_RETURN: INSTR("return"); break;
+        default:        printf("unknown opcode %d\n", opcode); break;
     }
     return offset;
 
