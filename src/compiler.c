@@ -56,6 +56,7 @@ static Parser p = {0};
 static Compiler *c = NULL;
 
 static const ParseRule *get_rule(TokenType op);
+static void statement(void);
 static void declaration(void);
 
 #define ERROR(line, ...)                 \
@@ -118,6 +119,21 @@ static void emit_byte2(uint8_t byte1, uint8_t byte2) {
 }
 
 static void emit_constant(Value constant) { emit_byte2(OP_CONSTANT, new_constant(constant)); }
+
+// Emits a jump instruction with placeholder operand and returns the offset to backpatch it later.
+static uint32_t emit_jump(uint8_t jump_op) {
+    emit_byte(jump_op);
+    uint32_t operand_offset = current_chunk()->length;
+    emit_byte2(0xFF, 0xFF);  // 16-bit operand
+    return operand_offset;
+}
+
+static void patch_jump(uint32_t offset) {
+    // -2 adjusts for the 16-bit jump operand that is already skipped.
+    uint32_t jump = current_chunk()->length - offset - 2;
+    if (jump > UINT16_MAX) ERROR_AT(current_chunk()->lines[offset], "Jump is too big");
+    memcpy(current_chunk()->code + offset, &jump, sizeof(uint16_t));
+}
 
 static void parse_precedence(Precedence precedence) {
     advance();
@@ -351,6 +367,25 @@ static void print_stmt(void) {
     emit_byte(OP_PRINT);
 }
 
+static void if_stmt(void) {
+    advance();
+    expect(TOKEN_LEFT_PAREN, "Expected '(' after 'if'");
+    expression();
+    expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after condition");
+
+    uint32_t jump_over_then = emit_jump(OP_JUMP_IF_FALSE);
+
+    emit_byte(OP_POP);  // pop the result of condition
+    statement();
+    uint32_t jump_over_else = emit_jump(OP_JUMP);
+
+    patch_jump(jump_over_then);
+    emit_byte(OP_POP);  // pop the result of condition
+    if (match(TOKEN_ELSE)) statement();
+
+    patch_jump(jump_over_else);
+}
+
 static void statement(void) {
     switch (p.current.type) {
         case TOKEN_LEFT_BRACE:
@@ -359,6 +394,7 @@ static void statement(void) {
             end_scope();
             break;
         case TOKEN_PRINT: print_stmt(); break;
+        case TOKEN_IF:    if_stmt(); break;
         default:          expression_stmt(); break;
     }
 }

@@ -37,8 +37,9 @@ static Value stack_peek(int distance) {
 }
 
 static InterpretResult run(void) {
-#define READ_BYTE() (*vm.ip++)
-#define READ_CONST() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_U8() (*vm.ip++)
+#define READ_U16() (vm.ip += 2, (uint16_t) (*(vm.ip - 2) | (*(vm.ip - 1) << 8)))
+#define READ_CONST() (vm.chunk->constants.values[READ_U8()])
 #define READ_STRING() ((ObjString*) READ_CONST().as.object)
 
 #define BINARY_OP(value_type, op)                                                   \
@@ -60,7 +61,7 @@ static InterpretResult run(void) {
         disassemble_instr(vm.chunk, vm.ip - vm.chunk->code);
 #endif
 
-        uint8_t instruction = READ_BYTE();
+        uint8_t instruction = READ_U8();
         switch (instruction) {
             case OP_NIL:      stack_push(VALUE_NIL()); break;
             case OP_TRUE:     stack_push(VALUE_BOOL(true)); break;
@@ -93,10 +94,6 @@ static InterpretResult run(void) {
                 }
                 (vm.stack_top - 1)->as.number *= -1;
                 break;
-            case OP_PRINT:
-                print_value(stack_pop());
-                printf("\n");
-                break;
             case OP_DEFINE_GLOBAL: {
                 ObjString* name = READ_STRING();
                 hashmap_set(&vm.globals, name, stack_peek(0));
@@ -122,14 +119,27 @@ static InterpretResult run(void) {
                     return RESULT_RUNTIME_ERROR;
                 }
             } break;
-            case OP_GET_LOCAL: stack_push(vm.stack[READ_BYTE()]); break;
-            case OP_SET_LOCAL: vm.stack[READ_BYTE()] = stack_peek(0); break;
-            case OP_RETURN:    return RESULT_OK;
-            default:           UNREACHABLE();
+            case OP_GET_LOCAL: stack_push(vm.stack[READ_U8()]); break;
+            case OP_SET_LOCAL: vm.stack[READ_U8()] = stack_peek(0); break;
+            case OP_PRINT:
+                print_value(stack_pop());
+                printf("\n");
+                break;
+            case OP_JUMP: {
+                uint16_t offset = READ_U16();
+                vm.ip += offset;
+            } break;
+            case OP_JUMP_IF_FALSE: {
+                uint16_t offset = READ_U16();
+                if (!value_is_truthy(stack_peek(0))) vm.ip += offset;
+            } break;
+            case OP_RETURN: return RESULT_OK;
+            default:        UNREACHABLE();
         }
     }
 
-#undef READ_BYTE
+#undef READ_U8
+#undef READ_U16
 #undef READ_CONST
 #undef READ_STRING
 #undef BINARY_OP
