@@ -1,0 +1,10 @@
+class A {
+  method() {}
+}
+
+class B < A {
+  method() {
+    // [ERROR] Expected '.' after 'super' at 8:11.
+    (super).method();
+  }
+}

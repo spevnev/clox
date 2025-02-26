@@ -1,0 +1,1 @@
+fun f() 123; // [ERROR] Expected '{' before function body at 1:7.

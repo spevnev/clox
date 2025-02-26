@@ -1,0 +1,4 @@
+fun foo(arg,
+        arg) { // [ERROR] Redeclaration of local variable 'arg' at 2:9.
+  "body";
+}

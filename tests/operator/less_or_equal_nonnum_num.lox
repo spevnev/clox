@@ -1,0 +1,1 @@
+"1" <= 1; // [ERROR] Operands must be numbers but found '1' at 1:8.

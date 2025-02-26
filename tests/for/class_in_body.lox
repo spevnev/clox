@@ -1,0 +1,1 @@
+for (;;) class Foo {} // [ERROR] Expected an expression but found 'class' at 1:10.

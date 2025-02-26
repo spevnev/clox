@@ -1,0 +1,7 @@
+class A {}
+
+class B < A {
+  method() {
+    super.; // [ERROR] Expected superclass method name after 'super' at 5:11.
+  }
+}

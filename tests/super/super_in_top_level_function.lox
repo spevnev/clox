@@ -1,0 +1,1 @@
+super.bar(); // [ERROR] Cannot use 'super' outside of class at 1:1.

@@ -1,0 +1,1 @@
+123.foo; // [ERROR] Fields only exist on instances but found '123' at 1:5.

@@ -1,0 +1,1 @@
+123(); // [ERROR] Only functions and classes can be called but found '123' at 1:5.

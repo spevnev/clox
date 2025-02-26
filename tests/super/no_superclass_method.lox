@@ -1,0 +1,9 @@
+class Base {}
+
+class Derived < Base {
+  foo() {
+    super.doesNotExist(1); // [ERROR] Undefined superclass method 'doesNotExist' at 5:25.
+  }
+}
+
+Derived().foo();

@@ -1,0 +1,1 @@
+var nil = "value"; // [ERROR] Expected a variable name after 'var' at 1:5.

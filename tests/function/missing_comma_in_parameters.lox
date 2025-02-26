@@ -1,0 +1,1 @@
+fun foo(a, b c, d, e, f) {} // [ERROR] Unclosed '(', expected ')' after parameters at 1:14.

@@ -1,0 +1,1 @@
+true + 123; // [ERROR] Operands must both be numbers or strings but found 'true' at 1:8.

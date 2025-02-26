@@ -1,0 +1,10 @@
+class Foo {
+  init() {
+    print "init";
+    return;
+    print "nope";
+  }
+}
+
+var foo = Foo(); // init
+print foo; // Foo instance

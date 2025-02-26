@@ -1,0 +1,170 @@
+class Foo {}
+
+var foo = Foo();
+fun setFields() {
+  foo.bilberry = "bilberry";
+  foo.lime = "lime";
+  foo.elderberry = "elderberry";
+  foo.raspberry = "raspberry";
+  foo.gooseberry = "gooseberry";
+  foo.longan = "longan";
+  foo.mandarine = "mandarine";
+  foo.kiwifruit = "kiwifruit";
+  foo.orange = "orange";
+  foo.pomegranate = "pomegranate";
+  foo.tomato = "tomato";
+  foo.banana = "banana";
+  foo.juniper = "juniper";
+  foo.damson = "damson";
+  foo.blackcurrant = "blackcurrant";
+  foo.peach = "peach";
+  foo.grape = "grape";
+  foo.mango = "mango";
+  foo.redcurrant = "redcurrant";
+  foo.watermelon = "watermelon";
+  foo.plumcot = "plumcot";
+  foo.papaya = "papaya";
+  foo.cloudberry = "cloudberry";
+  foo.rambutan = "rambutan";
+  foo.salak = "salak";
+  foo.physalis = "physalis";
+  foo.huckleberry = "huckleberry";
+  foo.coconut = "coconut";
+  foo.date = "date";
+  foo.tamarind = "tamarind";
+  foo.lychee = "lychee";
+  foo.raisin = "raisin";
+  foo.apple = "apple";
+  foo.avocado = "avocado";
+  foo.nectarine = "nectarine";
+  foo.pomelo = "pomelo";
+  foo.melon = "melon";
+  foo.currant = "currant";
+  foo.plum = "plum";
+  foo.persimmon = "persimmon";
+  foo.olive = "olive";
+  foo.cranberry = "cranberry";
+  foo.boysenberry = "boysenberry";
+  foo.blackberry = "blackberry";
+  foo.passionfruit = "passionfruit";
+  foo.mulberry = "mulberry";
+  foo.marionberry = "marionberry";
+  foo.plantain = "plantain";
+  foo.lemon = "lemon";
+  foo.yuzu = "yuzu";
+  foo.loquat = "loquat";
+  foo.kumquat = "kumquat";
+  foo.salmonberry = "salmonberry";
+  foo.tangerine = "tangerine";
+  foo.durian = "durian";
+  foo.pear = "pear";
+  foo.cantaloupe = "cantaloupe";
+  foo.quince = "quince";
+  foo.guava = "guava";
+  foo.strawberry = "strawberry";
+  foo.nance = "nance";
+  foo.apricot = "apricot";
+  foo.jambul = "jambul";
+  foo.grapefruit = "grapefruit";
+  foo.clementine = "clementine";
+  foo.jujube = "jujube";
+  foo.cherry = "cherry";
+  foo.feijoa = "feijoa";
+  foo.jackfruit = "jackfruit";
+  foo.fig = "fig";
+  foo.cherimoya = "cherimoya";
+  foo.pineapple = "pineapple";
+  foo.blueberry = "blueberry";
+  foo.jabuticaba = "jabuticaba";
+  foo.miracle = "miracle";
+  foo.dragonfruit = "dragonfruit";
+  foo.satsuma = "satsuma";
+  foo.tamarillo = "tamarillo";
+  foo.honeydew = "honeydew";
+}
+
+setFields();
+
+fun printFields() {
+  print foo.apple; // apple
+  print foo.apricot; // apricot
+  print foo.avocado; // avocado
+  print foo.banana; // banana
+  print foo.bilberry; // bilberry
+  print foo.blackberry; // blackberry
+  print foo.blackcurrant; // blackcurrant
+  print foo.blueberry; // blueberry
+  print foo.boysenberry; // boysenberry
+  print foo.cantaloupe; // cantaloupe
+  print foo.cherimoya; // cherimoya
+  print foo.cherry; // cherry
+  print foo.clementine; // clementine
+  print foo.cloudberry; // cloudberry
+  print foo.coconut; // coconut
+  print foo.cranberry; // cranberry
+  print foo.currant; // currant
+  print foo.damson; // damson
+  print foo.date; // date
+  print foo.dragonfruit; // dragonfruit
+  print foo.durian; // durian
+  print foo.elderberry; // elderberry
+  print foo.feijoa; // feijoa
+  print foo.fig; // fig
+  print foo.gooseberry; // gooseberry
+  print foo.grape; // grape
+  print foo.grapefruit; // grapefruit
+  print foo.guava; // guava
+  print foo.honeydew; // honeydew
+  print foo.huckleberry; // huckleberry
+  print foo.jabuticaba; // jabuticaba
+  print foo.jackfruit; // jackfruit
+  print foo.jambul; // jambul
+  print foo.jujube; // jujube
+  print foo.juniper; // juniper
+  print foo.kiwifruit; // kiwifruit
+  print foo.kumquat; // kumquat
+  print foo.lemon; // lemon
+  print foo.lime; // lime
+  print foo.longan; // longan
+  print foo.loquat; // loquat
+  print foo.lychee; // lychee
+  print foo.mandarine; // mandarine
+  print foo.mango; // mango
+  print foo.marionberry; // marionberry
+  print foo.melon; // melon
+  print foo.miracle; // miracle
+  print foo.mulberry; // mulberry
+  print foo.nance; // nance
+  print foo.nectarine; // nectarine
+  print foo.olive; // olive
+  print foo.orange; // orange
+  print foo.papaya; // papaya
+  print foo.passionfruit; // passionfruit
+  print foo.peach; // peach
+  print foo.pear; // pear
+  print foo.persimmon; // persimmon
+  print foo.physalis; // physalis
+  print foo.pineapple; // pineapple
+  print foo.plantain; // plantain
+  print foo.plum; // plum
+  print foo.plumcot; // plumcot
+  print foo.pomegranate; // pomegranate
+  print foo.pomelo; // pomelo
+  print foo.quince; // quince
+  print foo.raisin; // raisin
+  print foo.rambutan; // rambutan
+  print foo.raspberry; // raspberry
+  print foo.redcurrant; // redcurrant
+  print foo.salak; // salak
+  print foo.salmonberry; // salmonberry
+  print foo.satsuma; // satsuma
+  print foo.strawberry; // strawberry
+  print foo.tamarillo; // tamarillo
+  print foo.tamarind; // tamarind
+  print foo.tangerine; // tangerine
+  print foo.tomato; // tomato
+  print foo.watermelon; // watermelon
+  print foo.yuzu; // yuzu
+}
+
+printFields();

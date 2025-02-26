@@ -1,0 +1,1 @@
+123.; // [ERROR] Expected field after '.' at 1:5.

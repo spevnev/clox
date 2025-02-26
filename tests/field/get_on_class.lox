@@ -1,0 +1,2 @@
+class Foo {}
+Foo.bar; // [ERROR] Fields only exist on instances but found 'Foo' at 2:5.

@@ -1,0 +1,2 @@
+var Number = 123;
+class Foo < Number {} // [ERROR] Superclass must be a class but found '123' at 2:13.

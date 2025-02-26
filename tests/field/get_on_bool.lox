@@ -1,0 +1,1 @@
+true.foo; // [ERROR] Fields only exist on instances but found 'true' at 1:6.

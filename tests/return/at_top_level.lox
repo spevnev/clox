@@ -1,0 +1,1 @@
+return "wat"; // [ERROR] Cannot return outside of function at 1:1.

@@ -1,0 +1,3 @@
+class Foo {}
+
+Foo().unknown(); // [ERROR] Undefined field 'unknown' at 3:15.

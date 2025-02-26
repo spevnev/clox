@@ -1,0 +1,1 @@
+"str"(); // [ERROR] Only functions and classes can be called but found 'str' at 1:7.

@@ -1,0 +1,13 @@
+/// Bound methods have identity equality.
+class Foo {}
+class Bar {}
+
+print Foo == Foo; // true
+print Foo == Bar; // false
+print Bar == Foo; // false
+print Bar == Bar; // true
+
+print Foo == "Foo"; // false
+print Foo == nil;   // false
+print Foo == 123;   // false
+print Foo == true;  // false

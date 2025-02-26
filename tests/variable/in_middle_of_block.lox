@@ -1,0 +1,10 @@
+{
+  var a = "a";
+  print a; // a
+  var b = a + " b";
+  print b; // a b
+  var c = a + " c";
+  print c; // a c
+  var d = b + " d";
+  print d; // a b d
+}

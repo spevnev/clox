@@ -1,0 +1,1 @@
+print "s" + nil; // [ERROR] Operands must both be numbers or strings but found 'nil' at 1:13.

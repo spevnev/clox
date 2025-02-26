@@ -1,0 +1,1 @@
+if (true) "ok"; else var foo; // [ERROR] Expected an expression but found 'var' at 1:22.

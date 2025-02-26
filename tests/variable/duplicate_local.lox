@@ -1,0 +1,4 @@
+{
+  var a = "value";
+  var a = "other"; // [ERROR] Redeclaration of local variable 'a' at 3:7.
+}

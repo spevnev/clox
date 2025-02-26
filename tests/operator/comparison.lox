@@ -1,0 +1,25 @@
+print 1 < 2;    // true
+print 2 < 2;    // false
+print 2 < 1;    // false
+
+print 1 <= 2;    // true
+print 2 <= 2;    // true
+print 2 <= 1;    // false
+
+print 1 > 2;    // false
+print 2 > 2;    // false
+print 2 > 1;    // true
+
+print 1 >= 2;    // false
+print 2 >= 2;    // true
+print 2 >= 1;    // true
+
+/// Zero and negative zero compare the same.
+print 0 < -0; // false
+print -0 < 0; // false
+print 0 > -0; // false
+print -0 > 0; // false
+print 0 <= -0; // true
+print -0 <= 0; // true
+print 0 >= -0; // true
+print -0 >= 0; // true

@@ -1,0 +1,1 @@
+for (var a = 1; a < 2; {}) {} // [ERROR] Expected an expression but found '{' at 1:24.

@@ -1,0 +1,7 @@
+class Foo {
+  Foo() {
+    this = "value"; // [ERROR] Invalid assignment target at 3:5.
+  }
+}
+
+Foo();

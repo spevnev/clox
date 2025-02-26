@@ -1,0 +1,4 @@
+fun foo() {}
+print foo; // <fn foo>
+
+print clock; // <fn clock>

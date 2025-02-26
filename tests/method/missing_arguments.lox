@@ -1,0 +1,5 @@
+class Foo {
+  method(a, b) {}
+}
+
+Foo().method(1); // [ERROR] Function 'method' expected 2 arguments but got 1 at 5:15.

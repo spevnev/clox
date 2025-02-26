@@ -1,0 +1,13 @@
+print !true;     // false
+print !false;    // true
+print !!true;    // true
+
+print !123;      // false
+print !0;        // false
+
+print !nil;     // true
+
+print !"";       // false
+
+fun foo() {}
+print !foo;      // false

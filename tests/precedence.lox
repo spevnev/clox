@@ -1,0 +1,32 @@
+/// * has higher precedence than +.
+print 2 + 3 * 4; // 14
+
+/// * has higher precedence than -.
+print 20 - 3 * 4; // 8
+
+/// / has higher precedence than +.
+print 2 + 6 / 3; // 4
+
+/// / has higher precedence than -.
+print 2 - 6 / 3; // 0
+
+/// < has higher precedence than ==.
+print false == 2 < 1; // true
+
+/// > has higher precedence than ==.
+print false == 1 > 2; // true
+
+/// <= has higher precedence than ==.
+print false == 2 <= 1; // true
+
+/// >= has higher precedence than ==.
+print false == 1 >= 2; // true
+
+/// 1 - 1 is not space-sensitive.
+print 1 - 1; // 0
+print 1 -1;  // 0
+print 1- 1;  // 0
+print 1-1;   // 0
+
+/// Using () for grouping.
+print (2 * (6 - (2 + 2))); // 4

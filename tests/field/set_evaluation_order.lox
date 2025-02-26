@@ -1,0 +1,2 @@
+undefined1.bar // [ERROR] Undefined variable 'undefined1' at 1:1.
+  = undefined2;
