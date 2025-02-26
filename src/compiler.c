@@ -240,6 +240,26 @@ static void binary(bool UNUSED(can_assign)) {
     }
 }
 
+static void and_(bool UNUSED(can_assign)) {
+    // Jump over second operand if the first one is false (short-circuiting).
+    uint32_t jump = emit_jump(OP_JUMP_IF_FALSE);
+
+    // If we fall through the jump, it means that the first operand is true.
+    // Result now depends only on the second one so we pop the first operand.
+    emit_byte(OP_POP);
+    parse_precedence(PREC_AND);
+
+    patch_jump(jump);
+}
+
+static void or_(bool UNUSED(can_assign)) {
+    // Same logic as in `and_` but reversed.
+    uint32_t jump = emit_jump(OP_JUMP_IF_TRUE);
+    emit_byte(OP_POP);
+    parse_precedence(PREC_OR);
+    patch_jump(jump);
+}
+
 static void conditional(bool UNUSED(can_assign)) {
     parse_precedence(PREC_ASSIGNMENT);
     expect(TOKEN_COLON, "Expected ':' after then branch of conditional (ternary) operator");
@@ -272,6 +292,8 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_GREATER_EQUAL] = { NULL,     binary,      PREC_COMPARISON  },
     [TOKEN_LESS]          = { NULL,     binary,      PREC_COMPARISON  },
     [TOKEN_LESS_EQUAL]    = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_AND]           = { NULL,     and_,        PREC_AND         },
+    [TOKEN_OR]            = { NULL,     or_,         PREC_OR          },
     [TOKEN_QUESTION]      = { NULL,     conditional, PREC_CONDITIONAL },
     // clang-format on
 };

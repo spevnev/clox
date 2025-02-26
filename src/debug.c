@@ -53,6 +53,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_PRINT:         INSTR("print"); break;
         case OP_JUMP:          JUMP_INSTR("jump"); break;
         case OP_JUMP_IF_FALSE: JUMP_INSTR("jump if false"); break;
+        case OP_JUMP_IF_TRUE:  JUMP_INSTR("jump if true"); break;
         case OP_RETURN:        INSTR("return"); break;
         default:               printf("unknown opcode %d\n", opcode); break;
     }
