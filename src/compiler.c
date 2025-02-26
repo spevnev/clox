@@ -261,14 +261,16 @@ static void or_(bool UNUSED(can_assign)) {
 }
 
 static void conditional(bool UNUSED(can_assign)) {
+    uint32_t jump_over_then = emit_jump(OP_JUMP_IF_FALSE);
+    emit_byte(OP_POP);  // pop the result of condition
     parse_precedence(PREC_ASSIGNMENT);
-    expect(TOKEN_COLON, "Expected ':' after then branch of conditional (ternary) operator");
-    parse_precedence(PREC_CONDITIONAL);
+    uint32_t jump_over_else = emit_jump(OP_JUMP);
 
-    // Temporary:
-    ERROR_AT(p.previous.line, "Conditional ternary operator is not implemented yet, for now it just sums all operands");
-    emit_byte(OP_ADD);
-    emit_byte(OP_ADD);
+    expect(TOKEN_COLON, "Expected ':' after then branch of conditional (ternary) operator");
+    patch_jump(jump_over_then);
+    emit_byte(OP_POP);  // pop the result of condition
+    parse_precedence(PREC_CONDITIONAL);
+    patch_jump(jump_over_else);
 }
 
 static const ParseRule rules[TOKEN_COUNT] = {
