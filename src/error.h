@@ -3,13 +3,6 @@
 
 #include "common.h"
 
-#define ERROR(...)                    \
-    do {                              \
-        fprintf(stderr, "[ERROR] ");  \
-        fprintf(stderr, __VA_ARGS__); \
-        fprintf(stderr, ".\n");       \
-    } while (0)
-
 #define ERROR_AT(line, ...)                      \
     do {                                         \
         fprintf(stderr, "[ERROR] ");             \
@@ -17,10 +10,12 @@
         fprintf(stderr, " at line %d.\n", line); \
     } while (0)
 
-#define PANIC(...)          \
-    do {                    \
-        ERROR(__VA_ARGS__); \
-        exit(EXIT_FAILURE); \
+#define PANIC(...)                    \
+    do {                              \
+        fprintf(stderr, "[ERROR] ");  \
+        fprintf(stderr, __VA_ARGS__); \
+        fprintf(stderr, ".\n");       \
+        exit(EXIT_FAILURE);           \
     } while (0)
 
 #define OUT_OF_MEMORY() PANIC("Program ran out of memory")

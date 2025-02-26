@@ -5,9 +5,10 @@
 
 uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
 #define INSTR(instr) printf(instr "\n")
+#define BYTE_INSTR(instr) printf(instr " %u\n", chunk->code[offset++]);
 #define CONST_INSTR(instr)                               \
     do {                                                 \
-        uint32_t const_idx = chunk->code[offset++];      \
+        uint8_t const_idx = chunk->code[offset++];       \
         printf(instr " %u '", const_idx);                \
         print_value(chunk->constants.values[const_idx]); \
         printf("'\n");                                   \
@@ -42,12 +43,15 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_DEFINE_GLOBAL: CONST_INSTR("define global"); break;
         case OP_GET_GLOBAL:    CONST_INSTR("get global"); break;
         case OP_SET_GLOBAL:    CONST_INSTR("set global"); break;
+        case OP_GET_LOCAL:     BYTE_INSTR("get local"); break;
+        case OP_SET_LOCAL:     BYTE_INSTR("set local"); break;
         case OP_RETURN:        INSTR("return"); break;
         default:               printf("unknown opcode %d\n", opcode); break;
     }
     return offset;
 
 #undef INSTR
+#undef BYTE_INSTR
 #undef CONST_INSTR
 }
 

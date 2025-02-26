@@ -71,6 +71,6 @@ typedef struct {
 } Lexer;
 
 void init_lexer(const char *source);
-Token next_token();
+Token next_token(void);
 
 #endif  // CLOX_LEXER_H_

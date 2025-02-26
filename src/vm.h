@@ -25,8 +25,8 @@ typedef struct {
 
 extern VM vm;
 
-void init_vm();
-void free_vm();
+void init_vm(void);
+void free_vm(void);
 InterpretResult interpret(const char* source);
 
 #endif  // CLOX_VM_H_

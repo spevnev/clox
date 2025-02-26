@@ -122,8 +122,10 @@ static InterpretResult run(void) {
                     return RESULT_RUNTIME_ERROR;
                 }
             } break;
-            case OP_RETURN: return RESULT_OK;
-            default:        UNREACHABLE();
+            case OP_GET_LOCAL: stack_push(vm.stack[READ_BYTE()]); break;
+            case OP_SET_LOCAL: vm.stack[READ_BYTE()] = stack_peek(0); break;
+            case OP_RETURN:    return RESULT_OK;
+            default:           UNREACHABLE();
         }
     }
 
