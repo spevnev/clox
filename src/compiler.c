@@ -24,7 +24,6 @@ typedef enum {
 } Precedence;
 
 typedef struct {
-    Chunk *chunk;
     bool had_error;
     bool is_panicking;
     Token previous;
@@ -46,11 +45,18 @@ typedef struct {
 
 #define DEPTH_UNINITIALIZED -1
 
+typedef enum { FUN_SCRIPT, FUN_FUNCTION } FunctionType;
+
 typedef struct {
+    FunctionType function_type;
+    ObjFunction *function;
     Local locals[UINT8_MAX + 1];
     int local_count;
     int scope_depth;
 } Compiler;
+
+// Name of top-level function
+#define SCRIPT_NAME "<script>"
 
 static Parser p = {0};
 static Compiler *c = NULL;
@@ -96,7 +102,7 @@ static bool match(TokenType type) {
     return true;
 }
 
-static Chunk *current_chunk(void) { return p.chunk; }
+static Chunk *current_chunk(void) { return &c->function->chunk; }
 
 static uint8_t new_constant(Value constant) {
     uint32_t index = push_constant(current_chunk(), constant);
@@ -533,22 +539,23 @@ static void declaration(void) {
     if (p.is_panicking) synchronize();
 }
 
-static void init_parser(Chunk *chunk) { p.chunk = chunk; }
-
-bool compile(const char *source, Chunk *chunk) {
-    Compiler compiler = {0};
+ObjFunction *compile(const char *source) {
+    Compiler compiler = {
+        .function_type = FUN_SCRIPT,
+        .function = new_function(),
+    };
+    compiler.function->name = copy_string(SCRIPT_NAME, strlen(SCRIPT_NAME));
     c = &compiler;
 
     init_lexer(source);
-    init_parser(chunk);
 
     advance();
     while (!match(TOKEN_EOF)) declaration();
     emit_byte(OP_RETURN);
 
 #ifdef DEBUG_PRINT_BYTECODE
-    if (!p.had_error) disassemble_chunk(current_chunk());
+    if (!p.had_error) disassemble_chunk(current_chunk(), c->function->name->cstr);
 #endif
 
-    return !p.had_error;
+    return p.had_error ? NULL : c->function;
 }

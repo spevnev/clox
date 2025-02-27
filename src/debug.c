@@ -1,4 +1,6 @@
 #include "debug.h"
+#include <math.h>
+#include <string.h>
 #include "chunk.h"
 #include "common.h"
 #include "value.h"
@@ -70,9 +72,17 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
 #undef CONST_INSTR
 }
 
-void disassemble_chunk(const Chunk* chunk) {
-    printf("line | offset  instruction\n");
-    printf("--------------------------\n");
+static const char* HEADER = "line | offset  instruction";
+static const int HEADER_LEN = 40;
+
+void disassemble_chunk(const Chunk* chunk, const char* name) {
+    float padding = (HEADER_LEN - strlen(name) - 2) / 2.0;
+    for (int i = 0; i < ceilf(padding); i++) printf("-");
+    printf(" %s ", name);
+    for (int i = 0; i < floorf(padding); i++) printf("-");
+    printf("\n%s\n", HEADER);
+    for (int i = 0; i < HEADER_LEN; i++) printf("-");
+    printf("\n");
 
     uint32_t offset = 0;
     while (offset < chunk->length) offset = disassemble_instr(chunk, offset);

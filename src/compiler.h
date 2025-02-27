@@ -1,9 +1,9 @@
 #ifndef CLOX_COMPILER_H_
 #define CLOX_COMPILER_H_
 
-#include "chunk.h"
 #include "common.h"
+#include "object.h"
 
-bool compile(const char *source, Chunk *chunk);
+ObjFunction *compile(const char *source);
 
 #endif  // CLOX_COMPILER_H_

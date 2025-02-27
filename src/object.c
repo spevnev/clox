@@ -14,8 +14,20 @@ static Object *new_object(ObjectType type, uint32_t size) {
     return object;
 }
 
+ObjFunction *new_function(void) {
+    ObjFunction *function = (ObjFunction *) new_object(OBJ_FUNCTION, sizeof(ObjFunction));
+    function->arity = 0;
+    function->name = NULL;
+    function->chunk = (Chunk) {0};
+    return function;
+}
+
 void free_object(Object *object) {
     switch (object->type) {
+        case OBJ_FUNCTION:
+            free_chunk(&((ObjFunction *) object)->chunk);
+            reallocate(object, sizeof(ObjFunction), 0);
+            break;
         case OBJ_STRING: reallocate(object, sizeof(ObjString) + ((ObjString *) object)->length + 1, 0); break;
         default:         UNREACHABLE();
     }
@@ -23,8 +35,9 @@ void free_object(Object *object) {
 
 void print_object(const Object *object) {
     switch (object->type) {
-        case OBJ_STRING: printf("%s", ((const ObjString *) object)->cstr); break;
-        default:         UNREACHABLE();
+        case OBJ_FUNCTION: printf("<fn %s>", ((const ObjFunction *) object)->name->cstr); break;
+        case OBJ_STRING:   printf("%s", ((const ObjString *) object)->cstr); break;
+        default:           UNREACHABLE();
     }
 }
 

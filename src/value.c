@@ -3,6 +3,7 @@
 #include "common.h"
 #include "error.h"
 #include "memory.h"
+#include "object.h"
 
 void values_push(ValueVec *vec, Value value) {
     if (vec->length >= vec->capacity) {

@@ -2,6 +2,7 @@
 #define CLOX_HASHMAP_H_
 
 #include "common.h"
+#include "object.h"
 #include "value.h"
 
 typedef struct {

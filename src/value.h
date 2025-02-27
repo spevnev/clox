@@ -2,7 +2,8 @@
 #define CLOX_VALUE_H_
 
 #include "common.h"
-#include "object.h"
+
+typedef struct Object Object;
 
 typedef enum {
     VAL_NIL = 0,
@@ -30,10 +31,6 @@ typedef struct {
 #define VALUE_BOOL(value) ((Value) {.type = VAL_BOOL, .as.boolean = (value)})
 #define VALUE_NUMBER(value) ((Value) {.type = VAL_NUMBER, .as.number = (value)})
 #define VALUE_OBJECT(value) ((Value) {.type = VAL_OBJECT, .as.object = (Object *) (value)})
-
-static inline bool is_object_type(Value value, ObjectType type) {
-    return value.type == VAL_OBJECT && value.as.object->type == type;
-}
 
 void values_push(ValueVec *vec, Value value);
 void print_value(Value value);

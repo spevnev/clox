@@ -10,7 +10,16 @@
 
 VM vm = {0};
 
-#define RUNTIME_ERROR(...) ERROR_AT(vm.chunk->lines[vm.ip - vm.chunk->code - 1], __VA_ARGS__)
+#define RUNTIME_ERROR(...)                                                \
+    do {                                                                  \
+        CallFrame* frame = &vm.frames[vm.frames_length - 1];              \
+        Chunk* chunk = &frame->function->chunk;                           \
+        ERROR_AT(chunk->lines[frame->ip - chunk->code - 1], __VA_ARGS__); \
+    } while (0)
+
+static bool is_object_type(Value value, ObjectType type) {
+    return value.type == VAL_OBJECT && value.as.object->type == type;
+}
 
 __attribute__((unused)) static void print_stack(void) {
     printf("Stack: ");
@@ -37,9 +46,9 @@ static Value stack_peek(int distance) {
 }
 
 static InterpretResult run(void) {
-#define READ_U8() (*vm.ip++)
-#define READ_U16() (vm.ip += 2, (uint16_t) (*(vm.ip - 2) | (*(vm.ip - 1) << 8)))
-#define READ_CONST() (vm.chunk->constants.values[READ_U8()])
+#define READ_U8() (*frame->ip++)
+#define READ_U16() (frame->ip += 2, (uint16_t) (*(frame->ip - 2) | (*(frame->ip - 1) << 8)))
+#define READ_CONST() (frame->function->chunk.constants.values[READ_U8()])
 #define READ_STRING() ((ObjString*) READ_CONST().as.object)
 
 #define BINARY_OP(value_type, op)                                                   \
@@ -53,12 +62,13 @@ static InterpretResult run(void) {
         stack_push(value_type(a op b));                                             \
     } while (0)
 
+    CallFrame* frame = &vm.frames[vm.frames_length - 1];
     for (;;) {
 #ifdef DEBUG_TRACE_STACK
         print_stack();
 #endif
 #ifdef DEBUG_TRACE_INSTR
-        disassemble_instr(vm.chunk, vm.ip - vm.chunk->code);
+        disassemble_instr(&frame->function->chunk, frame->ip - frame->function->chunk.code);
 #endif
 
         uint8_t instruction = READ_U8();
@@ -119,27 +129,27 @@ static InterpretResult run(void) {
                     return RESULT_RUNTIME_ERROR;
                 }
             } break;
-            case OP_GET_LOCAL: stack_push(vm.stack[READ_U8()]); break;
-            case OP_SET_LOCAL: vm.stack[READ_U8()] = stack_peek(0); break;
+            case OP_GET_LOCAL: stack_push(frame->slots[READ_U8()]); break;
+            case OP_SET_LOCAL: frame->slots[READ_U8()] = stack_peek(0); break;
             case OP_PRINT:
                 print_value(stack_pop());
                 printf("\n");
                 break;
             case OP_JUMP: {
                 uint16_t offset = READ_U16();
-                vm.ip += offset;
+                frame->ip += offset;
             } break;
             case OP_JUMP_IF_FALSE: {
                 uint16_t offset = READ_U16();
-                if (!value_is_truthy(stack_peek(0))) vm.ip += offset;
+                if (!value_is_truthy(stack_peek(0))) frame->ip += offset;
             } break;
             case OP_JUMP_IF_TRUE: {
                 uint16_t offset = READ_U16();
-                if (value_is_truthy(stack_peek(0))) vm.ip += offset;
+                if (value_is_truthy(stack_peek(0))) frame->ip += offset;
             } break;
             case OP_LOOP: {
                 uint16_t offset = READ_U16();
-                vm.ip -= offset;
+                frame->ip -= offset;
             } break;
             case OP_RETURN: return RESULT_OK;
             default:        UNREACHABLE();
@@ -167,16 +177,13 @@ void free_vm(void) {
 }
 
 InterpretResult interpret(const char* source) {
-    Chunk chunk = {0};
-    if (!compile(source, &chunk)) {
-        free_chunk(&chunk);
-        return RESULT_COMPILE_ERROR;
-    }
+    ObjFunction* script = compile(source);
+    if (script == NULL) return RESULT_COMPILE_ERROR;
 
-    vm.chunk = &chunk;
-    vm.ip = chunk.code;
-    InterpretResult result = run();
+    CallFrame* frame = &vm.frames[vm.frames_length++];
+    frame->function = script;
+    frame->ip = script->chunk.code;
+    frame->slots = vm.stack;
 
-    free_chunk(&chunk);
-    return result;
+    return run();
 }
