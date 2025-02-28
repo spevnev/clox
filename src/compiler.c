@@ -47,7 +47,8 @@ typedef struct {
 
 typedef enum { FUN_SCRIPT, FUN_FUNCTION } FunctionType;
 
-typedef struct {
+typedef struct Compiler {
+    struct Compiler *enclosing;
     FunctionType function_type;
     ObjFunction *function;
     Local locals[UINT8_MAX + 1];
@@ -289,6 +290,19 @@ static void conditional(bool UNUSED(can_assign)) {
     patch_jump(jump_over_else);
 }
 
+static void call(bool UNUSED(can_assign)) {
+    uint8_t arg_num = 0;
+    if (!is_next(TOKEN_RIGHT_PAREN)) {
+        do {
+            expression();
+            if (arg_num >= MAX_ARITY) ERROR_PREV("Function call has too many arguments (max is %d)", MAX_ARITY);
+            arg_num++;
+        } while (match(TOKEN_COMMA));
+    }
+    expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after arguments");
+    emit_byte2(OP_CALL, arg_num);
+}
+
 static const ParseRule rules[TOKEN_COUNT] = {
     // clang-format off
     // token                  prefix,   infix,       precedence
@@ -298,7 +312,6 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_NUMBER]        = { number,   NULL,        PREC_NONE        },
     [TOKEN_STRING]        = { string,   NULL,        PREC_NONE        },
     [TOKEN_IDENTIFIER]    = { variable, NULL,        PREC_NONE        },
-    [TOKEN_LEFT_PAREN]    = { grouping, NULL,        PREC_NONE        },
     [TOKEN_BANG]          = { unary,    NULL,        PREC_NONE        },
     [TOKEN_MINUS]         = { unary,    binary,      PREC_TERM        },
     [TOKEN_PLUS]          = { NULL,     binary,      PREC_TERM        },
@@ -313,10 +326,33 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_AND]           = { NULL,     and_,        PREC_AND         },
     [TOKEN_OR]            = { NULL,     or_,         PREC_OR          },
     [TOKEN_QUESTION]      = { NULL,     conditional, PREC_CONDITIONAL },
+    [TOKEN_LEFT_PAREN]    = { grouping, call,        PREC_CALL        },
     // clang-format on
 };
 
 static const ParseRule *get_rule(TokenType op) { return &rules[op]; }
+
+static void init_compiler(Compiler *compiler, FunctionType function_type) {
+    compiler->enclosing = c;
+    compiler->function_type = function_type;
+    compiler->function = new_function();
+    // First slot of every function is reserved for its `ObjFunction`.
+    compiler->local_count = 1;
+    c = compiler;
+}
+
+static ObjFunction *end_compiler(void) {
+    // Implicitly return nil at the end of the function.
+    emit_byte2(OP_NIL, OP_RETURN);
+    ObjFunction *function = c->function;
+
+#ifdef DEBUG_PRINT_BYTECODE
+    if (!p.had_error) disassemble_chunk(current_chunk(), c->function->name->cstr);
+#endif
+
+    c = c->enclosing;
+    return function;
+}
 
 static void begin_scope(void) { c->scope_depth++; }
 
@@ -353,8 +389,13 @@ static void declare_local(void) {
     add_local(name);
 }
 
-static uint8_t parse_var(const char *error_message) {
-    expect(TOKEN_IDENTIFIER, error_message);
+static void mark_initialized(void) {
+    if (c->scope_depth == 0) return;  // Global variables are always initialized.
+    c->locals[c->local_count - 1].depth = c->scope_depth;
+}
+
+static uint8_t declare_var(void) {
+    assert(p.previous.type == TOKEN_IDENTIFIER && "declare_var must be called after consuming identifier");
 
     if (c->scope_depth == 0) {
         // Global variables are looked up by name, so we save their name as a constant.
@@ -363,6 +404,14 @@ static uint8_t parse_var(const char *error_message) {
         // Local variables do not need that, return a dummy value.
         declare_local();
         return 0;
+    }
+}
+
+static void define_var(uint8_t global) {
+    if (c->scope_depth == 0) {
+        emit_byte2(OP_DEFINE_GLOBAL, global);
+    } else {
+        mark_initialized();
     }
 }
 
@@ -495,6 +544,20 @@ static void for_stmt(void) {
     end_scope();
 }
 
+static void return_stmt(void) {
+    if (c->function_type == FUN_SCRIPT) ERROR_CURRENT("Return outside of function");
+
+    advance();
+    if (match(TOKEN_SEMICOLON)) {
+        // No return value.
+        emit_byte(OP_NIL);
+    } else {
+        expression();
+        expect(TOKEN_SEMICOLON, "Expected ';' after return");
+    }
+    emit_byte(OP_RETURN);
+}
+
 static void statement(void) {
     switch (p.current.type) {
         case TOKEN_LEFT_BRACE:
@@ -502,60 +565,90 @@ static void statement(void) {
             block();
             end_scope();
             break;
-        case TOKEN_PRINT: print_stmt(); break;
-        case TOKEN_IF:    if_stmt(); break;
-        case TOKEN_WHILE: while_stmt(); break;
-        case TOKEN_FOR:   for_stmt(); break;
-        default:          expression_stmt(); break;
+        case TOKEN_PRINT:  print_stmt(); break;
+        case TOKEN_IF:     if_stmt(); break;
+        case TOKEN_WHILE:  while_stmt(); break;
+        case TOKEN_FOR:    for_stmt(); break;
+        case TOKEN_RETURN: return_stmt(); break;
+        default:           expression_stmt(); break;
     }
 }
 
 static void var_decl(void) {
     advance();
-    uint8_t global = parse_var("Expected variable name after 'var'");
+    expect(TOKEN_IDENTIFIER, "Expected variable name after 'var'");
+
+    uint8_t global = declare_var();
 
     if (match(TOKEN_EQUAL)) {
         expression();
     } else {
-        // Value is implicitly nil.
+        // No initializer, value is implicitly nil.
         emit_byte(OP_NIL);
     }
     expect(TOKEN_SEMICOLON, "Expected ';' after variable declaration");
 
-    if (c->scope_depth == 0) {
-        emit_byte2(OP_DEFINE_GLOBAL, global);
-    } else {
-        assert(c->locals[c->local_count - 1].depth == DEPTH_UNINITIALIZED);
-        // Local var is already declared, now we define it (mark as initialized).
-        c->locals[c->local_count - 1].depth = c->scope_depth;
+    define_var(global);
+}
+
+static void function(FunctionType type) {
+    Compiler compiler = {0};
+    init_compiler(&compiler, type);
+    c->function->name = copy_string(p.previous.start, p.previous.length);
+    begin_scope();
+
+    expect(TOKEN_LEFT_PAREN, "Expected '(' after function name");
+    if (!is_next(TOKEN_RIGHT_PAREN)) {
+        do {
+            if (c->function->arity >= MAX_ARITY) ERROR_PREV("Function has too many parameters (max is %d)", MAX_ARITY);
+            c->function->arity++;
+            expect(TOKEN_IDENTIFIER, "Expected parameter name");
+            uint8_t var = declare_var();
+            define_var(var);
+        } while (match(TOKEN_COMMA));
     }
+    expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after parameters");
+    if (!is_next(TOKEN_LEFT_BRACE)) ERROR_PREV("Expected '{' before function body");
+    block();
+
+    end_scope();
+    ObjFunction *function = end_compiler();
+
+    // Add it to the constants table of the enclosing compiler.
+    emit_constant(VALUE_OBJECT(function));
+}
+
+static void fun_decl(void) {
+    advance();
+    expect(TOKEN_IDENTIFIER, "Expected function name after 'fun'");
+
+    uint8_t global = declare_var();
+    mark_initialized();  // Define it right away to allow recursive functions.
+
+    function(FUN_FUNCTION);
+
+    define_var(global);
 }
 
 static void declaration(void) {
     switch (p.current.type) {
         case TOKEN_VAR: var_decl(); break;
+        case TOKEN_FUN: fun_decl(); break;
         default:        statement(); break;
     }
     if (p.is_panicking) synchronize();
 }
 
 ObjFunction *compile(const char *source) {
-    Compiler compiler = {
-        .function_type = FUN_SCRIPT,
-        .function = new_function(),
-    };
-    compiler.function->name = copy_string(SCRIPT_NAME, strlen(SCRIPT_NAME));
-    c = &compiler;
-
     init_lexer(source);
+
+    Compiler compiler = {0};
+    init_compiler(&compiler, FUN_SCRIPT);
+    c->function->name = copy_string(SCRIPT_NAME, strlen(SCRIPT_NAME));
 
     advance();
     while (!match(TOKEN_EOF)) declaration();
-    emit_byte(OP_RETURN);
 
-#ifdef DEBUG_PRINT_BYTECODE
-    if (!p.had_error) disassemble_chunk(current_chunk(), c->function->name->cstr);
-#endif
-
-    return p.had_error ? NULL : c->function;
+    ObjFunction *script = end_compiler();
+    return p.had_error ? NULL : script;
 }

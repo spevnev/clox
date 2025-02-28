@@ -15,6 +15,7 @@ VM vm = {0};
         CallFrame* frame = &vm.frames[vm.frames_length - 1];              \
         Chunk* chunk = &frame->function->chunk;                           \
         ERROR_AT(chunk->lines[frame->ip - chunk->code - 1], __VA_ARGS__); \
+        print_stacktrace();                                               \
     } while (0)
 
 static bool is_object_type(Value value, ObjectType type) {
@@ -29,6 +30,16 @@ __attribute__((unused)) static void print_stack(void) {
     }
     printf("\n");
 }
+
+static void print_stacktrace(void) {
+    fprintf(stderr, "Stacktrace:\n");
+    for (CallFrame* frame = &vm.frames[vm.frames_length - 1]; frame >= vm.frames; frame--) {
+        ObjFunction* function = frame->function;
+        uint32_t line = function->chunk.lines[frame->ip - function->chunk.code - 1];
+        fprintf(stderr, "    '%s' at line %u\n", function->name->cstr, line);
+    }
+}
+
 static void stack_push(Value value) {
     assert(vm.stack_top - vm.stack < STACK_SIZE && "Stack overflow");
     *(vm.stack_top++) = value;
@@ -43,6 +54,35 @@ static Value stack_peek(int distance) {
     assert(distance >= 0 && "Peek distance must be non-negative");
     assert(distance < vm.stack_top - vm.stack && "Peek distance points outside of stack");
     return *(vm.stack_top - 1 - distance);
+}
+
+static CallFrame* call(ObjFunction* function, uint8_t arg_num) {
+    if (arg_num != function->arity) {
+        RUNTIME_ERROR("Function '%s' expected %d arguments but got %d", function->name->cstr, function->arity, arg_num);
+        return NULL;
+    }
+
+    if (vm.frames_length == CALLSTACK_SIZE) {
+        RUNTIME_ERROR("Stack overflow");
+        return NULL;
+    }
+
+    CallFrame* frame = &vm.frames[vm.frames_length++];
+    frame->function = function;
+    frame->ip = function->chunk.code;
+    // `ObjFunction` and the arguments are stored at the top of stack.
+    frame->slots = vm.stack_top - arg_num - 1;
+    return frame;
+}
+
+static CallFrame* call_value(Value value, uint8_t arg_num) {
+    if (value.type != VAL_OBJECT || value.as.object->type != OBJ_FUNCTION) {
+        RUNTIME_ERROR("Unable to call non-function");
+        return NULL;
+    }
+
+    ObjFunction* function = (ObjFunction*) value.as.object;
+    return call(function, arg_num);
 }
 
 static InterpretResult run(void) {
@@ -151,8 +191,31 @@ static InterpretResult run(void) {
                 uint16_t offset = READ_U16();
                 frame->ip -= offset;
             } break;
-            case OP_RETURN: return RESULT_OK;
-            default:        UNREACHABLE();
+            case OP_CALL: {
+                uint8_t arg_num = READ_U8();
+                frame = call_value(stack_peek(arg_num), arg_num);
+                if (frame == NULL) return RESULT_RUNTIME_ERROR;
+            } break;
+            case OP_RETURN: {
+                // Save return value.
+                Value return_value = stack_pop();
+
+                // Pop frame.
+                vm.frames_length--;
+                if (vm.frames_length == 0) {
+                    // Pop script's `ObjFunction`.
+                    stack_pop();
+                    return RESULT_OK;
+                }
+                vm.stack_top = frame->slots;
+
+                // Restore return value.
+                stack_push(return_value);
+
+                // Restore previous frame.
+                frame = &vm.frames[vm.frames_length - 1];
+            } break;
+            default: UNREACHABLE();
         }
     }
 
@@ -180,10 +243,7 @@ InterpretResult interpret(const char* source) {
     ObjFunction* script = compile(source);
     if (script == NULL) return RESULT_COMPILE_ERROR;
 
-    CallFrame* frame = &vm.frames[vm.frames_length++];
-    frame->function = script;
-    frame->ip = script->chunk.code;
-    frame->slots = vm.stack;
-
+    stack_push(VALUE_OBJECT(script));
+    call(script, 0);
     return run();
 }

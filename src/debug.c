@@ -61,6 +61,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
             offset += 2;
             printf("loop %u -> %04u\n", loop_offset, offset - loop_offset);
         } break;
+        case OP_CALL:   U8_INSTR("call"); break;
         case OP_RETURN: INSTR("return"); break;
         default:        printf("unknown opcode %d\n", opcode); break;
     }

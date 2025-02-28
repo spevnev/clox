@@ -21,6 +21,8 @@ typedef struct {
     char cstr[];
 } ObjString;
 
+#define MAX_ARITY UINT8_MAX
+
 typedef struct {
     Object object;
     ObjString *name;
