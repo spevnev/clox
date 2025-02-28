@@ -6,17 +6,19 @@
 #include "value.h"
 
 uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
+#define READ_U8() (chunk->code[offset++])
+#define READ_U16() (offset += 2, (uint16_t) (chunk->code[offset - 2] | (chunk->code[offset - 1] << 8)))
+
 #define INSTR(instr) printf(instr "\n")
-#define U8_INSTR(instr) printf(instr " %u\n", chunk->code[offset++]);
-#define JUMP_INSTR(instr)                                                            \
-    do {                                                                             \
-        uint16_t jump_offset = chunk->code[offset] | (chunk->code[offset + 1] << 8); \
-        offset += 2;                                                                 \
-        printf(instr " %u -> %04u\n", jump_offset, offset + jump_offset);            \
+#define U8_INSTR(instr) printf(instr " %u\n", READ_U8());
+#define JUMP_INSTR(instr)                                                 \
+    do {                                                                  \
+        uint16_t jump_offset = READ_U16();                                \
+        printf(instr " %u -> %04u\n", jump_offset, offset + jump_offset); \
     } while (0)
 #define CONST_INSTR(instr)                               \
     do {                                                 \
-        uint8_t const_idx = chunk->code[offset++];       \
+        uint8_t const_idx = READ_U8();                   \
         printf(instr " %u '", const_idx);                \
         print_value(chunk->constants.values[const_idx]); \
         printf("'\n");                                   \
@@ -31,7 +33,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
 
     printf("%04d    ", offset);
 
-    OpCode opcode = chunk->code[offset++];
+    OpCode opcode = READ_U8();
     switch (opcode) {
         case OP_NIL:           INSTR("nil"); break;
         case OP_TRUE:          INSTR("true"); break;
@@ -52,21 +54,35 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_SET_GLOBAL:    CONST_INSTR("set global"); break;
         case OP_GET_LOCAL:     U8_INSTR("get local"); break;
         case OP_SET_LOCAL:     U8_INSTR("set local"); break;
+        case OP_GET_UPVALUE:   U8_INSTR("get upvalue"); break;
+        case OP_SET_UPVALUE:   U8_INSTR("set upvalue"); break;
         case OP_PRINT:         INSTR("print"); break;
         case OP_JUMP:          JUMP_INSTR("jump"); break;
         case OP_JUMP_IF_FALSE: JUMP_INSTR("jump if false"); break;
         case OP_JUMP_IF_TRUE:  JUMP_INSTR("jump if true"); break;
         case OP_LOOP:          {
-            uint16_t loop_offset = chunk->code[offset] | (chunk->code[offset + 1] << 8);
-            offset += 2;
+            uint16_t loop_offset = READ_U16();
             printf("loop %u -> %04u\n", loop_offset, offset - loop_offset);
         } break;
-        case OP_CALL:   U8_INSTR("call"); break;
-        case OP_RETURN: INSTR("return"); break;
-        default:        printf("unknown opcode %d\n", opcode); break;
+        case OP_CALL:    U8_INSTR("call"); break;
+        case OP_CLOSURE: {
+            uint8_t const_idx = chunk->code[offset];
+            CONST_INSTR("closure");
+            ObjFunction* function = (ObjFunction*) chunk->constants.values[const_idx].as.object;
+            for (uint32_t i = 0; i < function->upvalues_count; i++) {
+                uint8_t is_local = READ_U8();
+                uint8_t index = READ_U8();
+                printf("     |         |  %s %u\n", is_local ? "local" : "upvalue", index);
+            }
+        } break;
+        case OP_CLOSE_UPVALUE: INSTR("close upvalue"); break;
+        case OP_RETURN:        INSTR("return"); break;
+        default:               printf("unknown opcode %d\n", opcode); break;
     }
     return offset;
 
+#undef READ_U8
+#undef READ_U16
 #undef INSTR
 #undef U8_INSTR
 #undef JUMP_INSTR

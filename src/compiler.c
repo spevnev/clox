@@ -41,19 +41,30 @@ typedef struct {
 typedef struct {
     Token name;
     int depth;
+    bool is_captured;
 } Local;
 
 #define DEPTH_UNINITIALIZED -1
 
 typedef enum { FUN_SCRIPT, FUN_FUNCTION } FunctionType;
 
+#define CONSTANTS_MAX (UINT8_MAX + 1)
+#define LOCALS_MAX (UINT8_MAX + 1)
+#define UPVALUES_MAX (UINT8_MAX + 1)
+
+typedef struct {
+    bool is_local;
+    uint8_t index;
+} Upvalue;
+
 typedef struct Compiler {
     struct Compiler *enclosing;
     FunctionType function_type;
     ObjFunction *function;
-    Local locals[UINT8_MAX + 1];
+    Local locals[LOCALS_MAX];
     int local_count;
     int scope_depth;
+    Upvalue upvalues[UPVALUES_MAX];
 } Compiler;
 
 // Name of top-level function
@@ -105,9 +116,9 @@ static bool match(TokenType type) {
 
 static Chunk *current_chunk(void) { return &c->function->chunk; }
 
-static uint8_t new_constant(Value constant) {
+static uint8_t add_constant(Value constant) {
     uint32_t index = push_constant(current_chunk(), constant);
-    if (index > UINT8_MAX) {
+    if (index >= CONSTANTS_MAX) {
         ERROR_PREV("Too many constants in one chunk");
         return 0;
     }
@@ -116,7 +127,7 @@ static uint8_t new_constant(Value constant) {
 }
 
 static uint8_t identifier_constant(Token token) {
-    return new_constant(VALUE_OBJECT(copy_string(token.start, token.length)));
+    return add_constant(VALUE_OBJECT(copy_string(token.start, token.length)));
 }
 
 static void emit_byte(uint8_t byte) { push_byte(current_chunk(), byte, p.previous.line); }
@@ -126,7 +137,7 @@ static void emit_byte2(uint8_t byte1, uint8_t byte2) {
     emit_byte(byte2);
 }
 
-static void emit_constant(Value constant) { emit_byte2(OP_CONSTANT, new_constant(constant)); }
+static void emit_constant(Value constant) { emit_byte2(OP_CONSTANT, add_constant(constant)); }
 
 // Emits a jump instruction with placeholder operand and returns the offset to backpatch it later.
 static uint32_t emit_jump(uint8_t jump_op) {
@@ -177,6 +188,24 @@ static void expression(void) { parse_precedence(PREC_ASSIGNMENT); }
 
 static bool token_equals(Token a, Token b) { return a.length == b.length && memcmp(a.start, b.start, a.length) == 0; }
 
+static uint8_t add_upvalue(Compiler *c, uint8_t index, bool is_local) {
+    for (uint32_t i = 0; i < c->function->upvalues_count; i++) {
+        Upvalue *upvalue = &c->upvalues[i];
+        if (upvalue->index == index && upvalue->is_local == is_local) return i;
+    }
+
+    int upvalue_index = c->function->upvalues_count++;
+    if (upvalue_index >= UPVALUES_MAX) {
+        ERROR_PREV("Function captures too many variables.");
+        return 0;
+    }
+
+    c->upvalues[upvalue_index].is_local = is_local;
+    c->upvalues[upvalue_index].index = index;
+
+    return upvalue_index;
+}
+
 static int resolve_local(Compiler *c, Token name) {
     for (int i = c->local_count - 1; i >= 0; i--) {
         if (!token_equals(c->locals[i].name, name)) continue;
@@ -188,18 +217,33 @@ static int resolve_local(Compiler *c, Token name) {
     return -1;
 }
 
-static void named_var(Token token, bool can_assign) {
-    int local_idx = resolve_local(c, token);
+static int resolve_upvalue(Compiler *c, Token name) {
+    if (c->enclosing == NULL) return -1;
 
+    int index;
+    if ((index = resolve_local(c->enclosing, name)) != -1) {
+        c->enclosing->locals[index].is_captured = true;
+        return add_upvalue(c, index, true);
+    }
+    if ((index = resolve_upvalue(c->enclosing, name)) != -1) return add_upvalue(c, index, false);
+    return -1;
+}
+
+static void named_var(Token token, bool can_assign) {
+    int index;
     uint8_t get_op, set_op, operand;
-    if (local_idx == -1) {
+    if ((index = resolve_local(c, token)) != -1) {
+        get_op = OP_GET_LOCAL;
+        set_op = OP_SET_LOCAL;
+        operand = index;
+    } else if ((index = resolve_upvalue(c, token)) != -1) {
+        get_op = OP_GET_UPVALUE;
+        set_op = OP_SET_UPVALUE;
+        operand = index;
+    } else {
         get_op = OP_GET_GLOBAL;
         set_op = OP_SET_GLOBAL;
         operand = identifier_constant(token);
-    } else {
-        get_op = OP_GET_LOCAL;
-        set_op = OP_SET_LOCAL;
-        operand = local_idx;
     }
 
     if (can_assign && match(TOKEN_EQUAL)) {
@@ -358,14 +402,15 @@ static void begin_scope(void) { c->scope_depth++; }
 
 static void end_scope(void) {
     while (c->local_count > 0 && c->locals[c->local_count - 1].depth >= c->scope_depth) {
-        emit_byte(OP_POP);
+        if (c->locals[c->local_count - 1].is_captured) emit_byte(OP_CLOSE_UPVALUE);
+        else emit_byte(OP_POP);
         c->local_count--;
     }
     c->scope_depth--;
 }
 
 static void add_local(Token name) {
-    if (c->local_count > UINT8_MAX) {
+    if (c->local_count >= LOCALS_MAX) {
         ERROR_PREV("Too many local variables in one scope.");
         return;
     }
@@ -373,6 +418,7 @@ static void add_local(Token name) {
     Local *local = &c->locals[c->local_count++];
     local->name = name;
     local->depth = DEPTH_UNINITIALIZED;
+    local->is_captured = false;
 }
 
 static void declare_local(void) {
@@ -614,8 +660,10 @@ static void function(FunctionType type) {
     end_scope();
     ObjFunction *function = end_compiler();
 
-    // Add it to the constants table of the enclosing compiler.
-    emit_constant(VALUE_OBJECT(function));
+    emit_byte2(OP_CLOSURE, add_constant(VALUE_OBJECT(function)));
+    for (uint32_t i = 0; i < function->upvalues_count; i++) {
+        emit_byte2(compiler.upvalues[i].is_local ? 1 : 0, compiler.upvalues[i].index);
+    }
 }
 
 static void fun_decl(void) {

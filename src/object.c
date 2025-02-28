@@ -16,10 +16,27 @@ static Object *new_object(ObjectType type, uint32_t size) {
 
 ObjFunction *new_function(void) {
     ObjFunction *function = (ObjFunction *) new_object(OBJ_FUNCTION, sizeof(ObjFunction));
-    function->arity = 0;
     function->name = NULL;
+    function->arity = 0;
+    function->upvalues_count = 0;
     function->chunk = (Chunk) {0};
     return function;
+}
+
+ObjUpvalue *new_upvalue(Value *value) {
+    ObjUpvalue *upvalue = (ObjUpvalue *) new_object(OBJ_UPVALUE, sizeof(ObjUpvalue));
+    upvalue->location = value;
+    upvalue->next = NULL;
+    return upvalue;
+}
+
+ObjClosure *new_closure(ObjFunction *function) {
+    ObjClosure *closure = (ObjClosure *) new_object(OBJ_CLOSURE, sizeof(ObjClosure));
+    closure->function = function;
+    closure->upvalues = reallocate(NULL, 0, sizeof(*closure->upvalues) * function->upvalues_count);
+    for (uint32_t i = 0; i < function->upvalues_count; i++) closure->upvalues[i] = NULL;
+    closure->upvalues_length = function->upvalues_count;
+    return closure;
 }
 
 ObjNative *new_native(NativeDefinition def) {
@@ -37,6 +54,12 @@ void free_object(Object *object) {
             free_chunk(&((ObjFunction *) object)->chunk);
             reallocate(object, sizeof(ObjFunction), 0);
             break;
+        case OBJ_UPVALUE: reallocate(object, sizeof(ObjUpvalue), 0); break;
+        case OBJ_CLOSURE: {
+            ObjClosure *closure = (ObjClosure *) object;
+            ARRAY_REALLOC(closure->upvalues, closure->upvalues_length, 0);
+            reallocate(object, sizeof(ObjClosure), 0);
+        } break;
         case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
         default:         UNREACHABLE();
     }
@@ -46,6 +69,7 @@ void print_object(const Object *object) {
     switch (object->type) {
         case OBJ_STRING:   printf("%s", ((const ObjString *) object)->cstr); break;
         case OBJ_FUNCTION: printf("<fn %s>", ((const ObjFunction *) object)->name->cstr); break;
+        case OBJ_CLOSURE:  printf("<fn %s>", ((const ObjClosure *) object)->function->name->cstr); break;
         case OBJ_NATIVE:   printf("<native fn %s>", ((const ObjNative *) object)->name); break;
         default:           UNREACHABLE();
     }

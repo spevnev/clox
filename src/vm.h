@@ -16,7 +16,7 @@ typedef enum {
 #define STACK_SIZE (CALLSTACK_SIZE * (UINT8_MAX + 1))
 
 typedef struct {
-    ObjFunction* function;
+    ObjClosure* closure;
     uint8_t* ip;
     Value* slots;
 } CallFrame;
@@ -29,6 +29,7 @@ typedef struct {
     Object* objects;
     HashMap strings;  // Set of interned strings (values are always null).
     HashMap globals;
+    ObjUpvalue* open_upvalues;
 } VM;
 
 extern VM vm;
