@@ -1,11 +1,13 @@
 #include "vm.h"
 #include <assert.h>
 #include <stdarg.h>
+#include <string.h>
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
 #include "error.h"
+#include "native.h"
 #include "value.h"
 
 VM vm = {0};
@@ -56,15 +58,15 @@ static Value stack_peek(int distance) {
     return *(vm.stack_top - 1 - distance);
 }
 
-static CallFrame* call(ObjFunction* function, uint8_t arg_num) {
+static bool call(ObjFunction* function, uint8_t arg_num) {
     if (arg_num != function->arity) {
         RUNTIME_ERROR("Function '%s' expected %d arguments but got %d", function->name->cstr, function->arity, arg_num);
-        return NULL;
+        return false;
     }
 
     if (vm.frames_length == CALLSTACK_SIZE) {
         RUNTIME_ERROR("Stack overflow");
-        return NULL;
+        return false;
     }
 
     CallFrame* frame = &vm.frames[vm.frames_length++];
@@ -72,17 +74,35 @@ static CallFrame* call(ObjFunction* function, uint8_t arg_num) {
     frame->ip = function->chunk.code;
     // `ObjFunction` and the arguments are stored at the top of stack.
     frame->slots = vm.stack_top - arg_num - 1;
-    return frame;
+
+    return true;
 }
 
-static CallFrame* call_value(Value value, uint8_t arg_num) {
-    if (value.type != VAL_OBJECT || value.as.object->type != OBJ_FUNCTION) {
-        RUNTIME_ERROR("Unable to call non-function");
-        return NULL;
+static bool call_native(ObjNative* native, uint8_t arg_num) {
+    if (arg_num != native->arity) {
+        RUNTIME_ERROR("Function '%s' expected %d arguments but got %d", native->name, native->arity, arg_num);
+        return false;
     }
 
-    ObjFunction* function = (ObjFunction*) value.as.object;
-    return call(function, arg_num);
+    Value return_value = native->function(vm.stack_top - arg_num, arg_num);
+
+    vm.stack_top -= arg_num + 1;
+    stack_push(return_value);
+
+    return true;
+}
+
+static bool call_value(Value value, uint8_t arg_num) {
+    if (value.type == VAL_OBJECT) {
+        switch (value.as.object->type) {
+            case OBJ_FUNCTION: return call((ObjFunction*) value.as.object, arg_num);
+            case OBJ_NATIVE:   return call_native((ObjNative*) value.as.object, arg_num);
+            default:           break;
+        }
+    }
+
+    RUNTIME_ERROR("Unable to call non-function");
+    return false;
 }
 
 static InterpretResult run(void) {
@@ -193,8 +213,8 @@ static InterpretResult run(void) {
             } break;
             case OP_CALL: {
                 uint8_t arg_num = READ_U8();
-                frame = call_value(stack_peek(arg_num), arg_num);
-                if (frame == NULL) return RESULT_RUNTIME_ERROR;
+                if (!call_value(stack_peek(arg_num), arg_num)) return RESULT_RUNTIME_ERROR;
+                frame = &vm.frames[vm.frames_length - 1];
             } break;
             case OP_RETURN: {
                 // Save return value.
@@ -226,7 +246,14 @@ static InterpretResult run(void) {
 #undef BINARY_OP
 }
 
-void init_vm(void) { vm.stack_top = vm.stack; }
+void init_vm(void) {
+    vm.stack_top = vm.stack;
+
+    for (int i = 0; i < native_defs_length(); i++) {
+        ObjString* name = copy_string(native_defs[i].name, strlen(native_defs[i].name));
+        hashmap_set(&vm.globals, name, VALUE_OBJECT(new_native(native_defs[i])));
+    }
+}
 
 void free_vm(void) {
     Object* current = vm.objects;

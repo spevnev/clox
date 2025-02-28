@@ -22,21 +22,31 @@ ObjFunction *new_function(void) {
     return function;
 }
 
+ObjNative *new_native(NativeDefinition def) {
+    ObjNative *native = (ObjNative *) new_object(OBJ_NATIVE, sizeof(ObjNative));
+    native->name = def.name;
+    native->arity = def.arity;
+    native->function = def.function;
+    return native;
+}
+
 void free_object(Object *object) {
     switch (object->type) {
+        case OBJ_STRING: reallocate(object, sizeof(ObjString) + ((ObjString *) object)->length + 1, 0); break;
         case OBJ_FUNCTION:
             free_chunk(&((ObjFunction *) object)->chunk);
             reallocate(object, sizeof(ObjFunction), 0);
             break;
-        case OBJ_STRING: reallocate(object, sizeof(ObjString) + ((ObjString *) object)->length + 1, 0); break;
+        case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
         default:         UNREACHABLE();
     }
 }
 
 void print_object(const Object *object) {
     switch (object->type) {
-        case OBJ_FUNCTION: printf("<fn %s>", ((const ObjFunction *) object)->name->cstr); break;
         case OBJ_STRING:   printf("%s", ((const ObjString *) object)->cstr); break;
+        case OBJ_FUNCTION: printf("<fn %s>", ((const ObjFunction *) object)->name->cstr); break;
+        case OBJ_NATIVE:   printf("<native fn %s>", ((const ObjNative *) object)->name); break;
         default:           UNREACHABLE();
     }
 }
