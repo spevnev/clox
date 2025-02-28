@@ -210,22 +210,22 @@ static void named_var(Token token, bool can_assign) {
     }
 }
 
-static void nil(bool UNUSED(can_assign)) { emit_byte(OP_NIL); }
-static void true_(bool UNUSED(can_assign)) { emit_byte(OP_TRUE); }
-static void false_(bool UNUSED(can_assign)) { emit_byte(OP_FALSE); }
-static void number(bool UNUSED(can_assign)) { emit_constant(VALUE_NUMBER(strtod(p.previous.start, NULL))); }
-static void string(bool UNUSED(can_assign)) {
+static void nil(UNUSED(bool can_assign)) { emit_byte(OP_NIL); }
+static void true_(UNUSED(bool can_assign)) { emit_byte(OP_TRUE); }
+static void false_(UNUSED(bool can_assign)) { emit_byte(OP_FALSE); }
+static void number(UNUSED(bool can_assign)) { emit_constant(VALUE_NUMBER(strtod(p.previous.start, NULL))); }
+static void string(UNUSED(bool can_assign)) {
     emit_constant(VALUE_OBJECT(copy_string(p.previous.start + 1, p.previous.length - 2)));
 }
 
 static void variable(bool can_assign) { named_var(p.previous, can_assign); }
 
-static void grouping(bool UNUSED(can_assign)) {
+static void grouping(UNUSED(bool can_assign)) {
     expression();
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after expression");
 }
 
-static void unary(bool UNUSED(can_assign)) {
+static void unary(UNUSED(bool can_assign)) {
     TokenType op = p.previous.type;
 
     parse_precedence(PREC_UNARY);
@@ -237,7 +237,7 @@ static void unary(bool UNUSED(can_assign)) {
     }
 }
 
-static void binary(bool UNUSED(can_assign)) {
+static void binary(UNUSED(bool can_assign)) {
     TokenType op = p.previous.type;
 
     parse_precedence(get_rule(op)->precedence + 1);
@@ -257,7 +257,7 @@ static void binary(bool UNUSED(can_assign)) {
     }
 }
 
-static void and_(bool UNUSED(can_assign)) {
+static void and_(UNUSED(bool can_assign)) {
     // Jump over second operand if the first one is false (short-circuiting).
     uint32_t jump = emit_jump(OP_JUMP_IF_FALSE);
 
@@ -269,7 +269,7 @@ static void and_(bool UNUSED(can_assign)) {
     patch_jump(jump);
 }
 
-static void or_(bool UNUSED(can_assign)) {
+static void or_(UNUSED(bool can_assign)) {
     // Same logic as in `and_` but reversed.
     uint32_t jump = emit_jump(OP_JUMP_IF_TRUE);
     emit_byte(OP_POP);
@@ -277,7 +277,7 @@ static void or_(bool UNUSED(can_assign)) {
     patch_jump(jump);
 }
 
-static void conditional(bool UNUSED(can_assign)) {
+static void conditional(UNUSED(bool can_assign)) {
     uint32_t jump_over_then = emit_jump(OP_JUMP_IF_FALSE);
     emit_byte(OP_POP);
     parse_precedence(PREC_ASSIGNMENT);
@@ -290,7 +290,7 @@ static void conditional(bool UNUSED(can_assign)) {
     patch_jump(jump_over_else);
 }
 
-static void call(bool UNUSED(can_assign)) {
+static void call(UNUSED(bool can_assign)) {
     uint8_t arg_num = 0;
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
