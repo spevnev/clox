@@ -26,7 +26,7 @@ static bool is_digit(char c) { return '0' <= c && c <= '9'; }
 static bool is_alpha(char c) { return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '_'; }
 static bool is_alphanumeric(char c) { return is_alpha(c) || is_digit(c); }
 
-static int token_length(void) { return l.current - l.start; }
+static uint32_t token_length(void) { return l.current - l.start; }
 static bool is_done(void) { return *l.current == '\0'; }
 static char peek(void) { return *l.current; }
 static char peek_next(void) { return *(l.current + 1); }
@@ -83,7 +83,7 @@ static Token number(void) {
     return new_token(TOKEN_NUMBER);
 }
 
-static TokenType check_keyword(int offset, int length, const char *rest, TokenType type) {
+static TokenType check_keyword(uint32_t offset, uint32_t length, const char *rest, TokenType type) {
     if (token_length() == offset + length && memcmp(l.start + offset, rest, length) == 0) return type;
     return TOKEN_IDENTIFIER;
 }

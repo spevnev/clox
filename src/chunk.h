@@ -42,7 +42,6 @@ typedef struct {
     uint32_t capacity;
     uint8_t *code;
     uint32_t *lines;
-
     ValueVec constants;
 } Chunk;
 

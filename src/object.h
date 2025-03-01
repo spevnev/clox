@@ -30,7 +30,7 @@ typedef struct {
 typedef struct {
     Object object;
     ObjString *name;
-    int arity;
+    uint8_t arity;
     uint32_t upvalues_count;
     Chunk chunk;
 } ObjFunction;
@@ -45,20 +45,20 @@ typedef struct ObjUpvalue {
 typedef struct {
     Object object;
     ObjFunction *function;
-    ObjUpvalue **upvalues;
     uint32_t upvalues_length;
+    ObjUpvalue **upvalues;
 } ObjClosure;
 
 typedef struct {
     Object object;
     const char *name;
-    int arity;
+    uint8_t arity;
     NativeFun function;
 } ObjNative;
 
 void print_object(const Object *object);
 void free_object(Object *object);
-ObjFunction *new_function(void);
+ObjFunction *new_function(ObjString *name);
 ObjUpvalue *new_upvalue(Value *value);
 ObjClosure *new_closure(ObjFunction *function);
 ObjNative *new_native(NativeDefinition def);

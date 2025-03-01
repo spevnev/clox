@@ -48,10 +48,6 @@ typedef struct {
 
 typedef enum { FUN_SCRIPT, FUN_FUNCTION } FunctionType;
 
-#define CONSTANTS_MAX (UINT8_MAX + 1)
-#define LOCALS_MAX (UINT8_MAX + 1)
-#define UPVALUES_MAX (UINT8_MAX + 1)
-
 typedef struct {
     bool is_local;
     uint8_t index;
@@ -61,10 +57,10 @@ typedef struct Compiler {
     struct Compiler *enclosing;
     FunctionType function_type;
     ObjFunction *function;
-    Local locals[LOCALS_MAX];
-    int local_count;
     int scope_depth;
-    Upvalue upvalues[UPVALUES_MAX];
+    uint32_t locals_count;
+    Local locals[LOCALS_SIZE];
+    Upvalue upvalues[UPVALUES_SIZE];
 } Compiler;
 
 // Name of top-level function
@@ -118,7 +114,7 @@ static Chunk *current_chunk(void) { return &c->function->chunk; }
 
 static uint8_t add_constant(Value constant) {
     uint32_t index = push_constant(current_chunk(), constant);
-    if (index >= CONSTANTS_MAX) {
+    if (index >= CONSTANTS_SIZE) {
         ERROR_PREV("Too many constants in one chunk");
         return 0;
     }
@@ -194,8 +190,8 @@ static uint8_t add_upvalue(Compiler *c, uint8_t index, bool is_local) {
         if (upvalue->index == index && upvalue->is_local == is_local) return i;
     }
 
-    int upvalue_index = c->function->upvalues_count++;
-    if (upvalue_index >= UPVALUES_MAX) {
+    uint32_t upvalue_index = c->function->upvalues_count++;
+    if (upvalue_index >= UPVALUES_SIZE) {
         ERROR_PREV("Function captures too many variables.");
         return 0;
     }
@@ -207,7 +203,7 @@ static uint8_t add_upvalue(Compiler *c, uint8_t index, bool is_local) {
 }
 
 static int resolve_local(Compiler *c, Token name) {
-    for (int i = c->local_count - 1; i >= 0; i--) {
+    for (int i = c->locals_count - 1; i >= 0; i--) {
         if (!token_equals(c->locals[i].name, name)) continue;
         if (c->locals[i].depth == DEPTH_UNINITIALIZED) {
             ERROR_PREV("Cannot read local variable '%.*s' in its own initializer", name.length, name.start);
@@ -376,12 +372,12 @@ static const ParseRule rules[TOKEN_COUNT] = {
 
 static const ParseRule *get_rule(TokenType op) { return &rules[op]; }
 
-static void init_compiler(Compiler *compiler, FunctionType function_type) {
+static void init_compiler(Compiler *compiler, FunctionType function_type, ObjString *name) {
     compiler->enclosing = c;
     compiler->function_type = function_type;
-    compiler->function = new_function();
+    compiler->function = new_function(name);
     // First slot of every function is reserved for its `ObjFunction`.
-    compiler->local_count = 1;
+    compiler->locals_count = 1;
     c = compiler;
 }
 
@@ -401,21 +397,21 @@ static ObjFunction *end_compiler(void) {
 static void begin_scope(void) { c->scope_depth++; }
 
 static void end_scope(void) {
-    while (c->local_count > 0 && c->locals[c->local_count - 1].depth >= c->scope_depth) {
-        if (c->locals[c->local_count - 1].is_captured) emit_byte(OP_CLOSE_UPVALUE);
+    while (c->locals_count > 0 && c->locals[c->locals_count - 1].depth >= c->scope_depth) {
+        if (c->locals[c->locals_count - 1].is_captured) emit_byte(OP_CLOSE_UPVALUE);
         else emit_byte(OP_POP);
-        c->local_count--;
+        c->locals_count--;
     }
     c->scope_depth--;
 }
 
 static void add_local(Token name) {
-    if (c->local_count >= LOCALS_MAX) {
+    if (c->locals_count >= LOCALS_SIZE) {
         ERROR_PREV("Too many local variables in one scope.");
         return;
     }
 
-    Local *local = &c->locals[c->local_count++];
+    Local *local = &c->locals[c->locals_count++];
     local->name = name;
     local->depth = DEPTH_UNINITIALIZED;
     local->is_captured = false;
@@ -423,7 +419,7 @@ static void add_local(Token name) {
 
 static void declare_local(void) {
     Token name = p.previous;
-    for (int i = c->local_count - 1; i >= 0; i--) {
+    for (int i = c->locals_count - 1; i >= 0; i--) {
         Local *local = &c->locals[i];
         if (local->depth < c->scope_depth) break;
 
@@ -437,7 +433,7 @@ static void declare_local(void) {
 
 static void mark_initialized(void) {
     if (c->scope_depth == 0) return;  // Global variables are always initialized.
-    c->locals[c->local_count - 1].depth = c->scope_depth;
+    c->locals[c->locals_count - 1].depth = c->scope_depth;
 }
 
 static uint8_t declare_var(void) {
@@ -639,8 +635,7 @@ static void var_decl(void) {
 
 static void function(FunctionType type) {
     Compiler compiler = {0};
-    init_compiler(&compiler, type);
-    c->function->name = copy_string(p.previous.start, p.previous.length);
+    init_compiler(&compiler, type, copy_string(p.previous.start, p.previous.length));
     begin_scope();
 
     expect(TOKEN_LEFT_PAREN, "Expected '(' after function name");
@@ -691,8 +686,7 @@ ObjFunction *compile(const char *source) {
     init_lexer(source);
 
     Compiler compiler = {0};
-    init_compiler(&compiler, FUN_SCRIPT);
-    c->function->name = copy_string(SCRIPT_NAME, strlen(SCRIPT_NAME));
+    init_compiler(&compiler, FUN_SCRIPT, copy_string(SCRIPT_NAME, strlen(SCRIPT_NAME)));
 
     advance();
     while (!match(TOKEN_EOF)) declaration();

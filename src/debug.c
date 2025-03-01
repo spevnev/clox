@@ -16,12 +16,12 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         uint16_t jump_offset = READ_U16();                                \
         printf(instr " %u -> %04u\n", jump_offset, offset + jump_offset); \
     } while (0)
-#define CONST_INSTR(instr)                               \
-    do {                                                 \
-        uint8_t const_idx = READ_U8();                   \
-        printf(instr " %u '", const_idx);                \
-        print_value(chunk->constants.values[const_idx]); \
-        printf("'\n");                                   \
+#define CONST_INSTR(instr)                              \
+    do {                                                \
+        uint8_t constant = READ_U8();                   \
+        printf(instr " %u '", constant);                \
+        print_value(chunk->constants.values[constant]); \
+        printf("'\n");                                  \
     } while (0)
 
     uint32_t line = chunk->lines[offset];
@@ -66,9 +66,9 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         } break;
         case OP_CALL:    U8_INSTR("call"); break;
         case OP_CLOSURE: {
-            uint8_t const_idx = chunk->code[offset];
+            uint8_t constant = chunk->code[offset];
             CONST_INSTR("closure");
-            ObjFunction* function = (ObjFunction*) chunk->constants.values[const_idx].as.object;
+            ObjFunction* function = (ObjFunction*) chunk->constants.values[constant].as.object;
             for (uint32_t i = 0; i < function->upvalues_count; i++) {
                 uint8_t is_local = READ_U8();
                 uint8_t index = READ_U8();

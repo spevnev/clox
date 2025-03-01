@@ -12,6 +12,6 @@ typedef struct {
 } NativeDefinition;
 
 extern NativeDefinition native_defs[];
-int native_defs_length();
+size_t native_defs_length(void);
 
 #endif  // CLOX_NATIVE_H_

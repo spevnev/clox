@@ -2,6 +2,7 @@
 #define CLOX_VM_H_
 
 #include "chunk.h"
+#include "compiler.h"
 #include "hashmap.h"
 #include "object.h"
 #include "value.h"
@@ -13,7 +14,7 @@ typedef enum {
 } InterpretResult;
 
 #define CALLSTACK_SIZE 64
-#define STACK_SIZE (CALLSTACK_SIZE * (UINT8_MAX + 1))
+#define STACK_SIZE (CALLSTACK_SIZE * LOCALS_SIZE)
 
 typedef struct {
     ObjClosure* closure;
@@ -22,10 +23,10 @@ typedef struct {
 } CallFrame;
 
 typedef struct {
-    CallFrame frames[CALLSTACK_SIZE];
     uint32_t frames_length;
-    Value stack[STACK_SIZE];
+    CallFrame frames[CALLSTACK_SIZE];
     Value* stack_top;
+    Value stack[STACK_SIZE];
     Object* objects;
     HashMap strings;  // Set of interned strings (values are always null).
     HashMap globals;

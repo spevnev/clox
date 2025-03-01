@@ -14,9 +14,9 @@ static Object *new_object(ObjectType type, uint32_t size) {
     return object;
 }
 
-ObjFunction *new_function(void) {
+ObjFunction *new_function(ObjString *name) {
     ObjFunction *function = (ObjFunction *) new_object(OBJ_FUNCTION, sizeof(ObjFunction));
-    function->name = NULL;
+    function->name = name;
     function->arity = 0;
     function->upvalues_count = 0;
     function->chunk = (Chunk) {0};

@@ -52,8 +52,7 @@ static Value stack_pop(void) {
     return *(--vm.stack_top);
 }
 
-static Value stack_peek(int distance) {
-    assert(distance >= 0 && "Peek distance must be non-negative");
+static Value stack_peek(uint32_t distance) {
     assert(distance < vm.stack_top - vm.stack && "Peek distance points outside of stack");
     return *(vm.stack_top - 1 - distance);
 }
@@ -255,12 +254,11 @@ static InterpretResult run(void) {
                     uint8_t index = READ_U8();
 
                     if (is_local) {
-                        closure->upvalues[i] = capture_upvalue(frame->slots + index);
+                        closure->upvalues[i] = capture_upvalue(&frame->slots[index]);
                     } else {
                         closure->upvalues[i] = frame->closure->upvalues[index];
                     }
                 }
-
                 stack_push(VALUE_OBJECT(closure));
             } break;
             case OP_CLOSE_UPVALUE:
@@ -303,7 +301,7 @@ static InterpretResult run(void) {
 void init_vm(void) {
     vm.stack_top = vm.stack;
 
-    for (int i = 0; i < native_defs_length(); i++) {
+    for (size_t i = 0; i < native_defs_length(); i++) {
         ObjString* name = copy_string(native_defs[i].name, strlen(native_defs[i].name));
         hashmap_set(&vm.globals, name, VALUE_OBJECT(new_native(native_defs[i])));
     }
