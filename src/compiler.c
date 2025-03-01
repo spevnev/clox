@@ -424,7 +424,7 @@ static void declare_local(void) {
         if (local->depth < c->scope_depth) break;
 
         if (token_equals(local->name, name)) {
-            ERROR_PREV("Redefinition of a local variable '%.*s'", name.length, name.start);
+            ERROR_PREV("Redefinition of '%.*s'", name.length, name.start);
         }
     }
 
@@ -437,8 +437,6 @@ static void mark_initialized(void) {
 }
 
 static uint8_t declare_var(void) {
-    assert(p.previous.type == TOKEN_IDENTIFIER && "declare_var must be called after consuming identifier");
-
     if (c->scope_depth == 0) {
         // Global variables are looked up by name, so we save their name as a constant.
         return identifier_constant(p.previous);

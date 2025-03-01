@@ -150,10 +150,8 @@ static InterpretResult run(void) {
     } while (0)
 
     for (;;) {
-#ifdef DEBUG_TRACE_STACK
-        print_stack();
-#endif
 #ifdef DEBUG_TRACE_INSTR
+        print_stack();
         disassemble_instr(&vm.frame->closure->function->chunk, vm.frame->ip - vm.frame->closure->function->chunk.code);
 #endif
 
