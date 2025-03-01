@@ -23,7 +23,7 @@ typedef struct {
 } CallFrame;
 
 typedef struct {
-    uint32_t frames_length;
+    CallFrame* frame;
     CallFrame frames[CALLSTACK_SIZE];
     Value* stack_top;
     Value stack[STACK_SIZE];
