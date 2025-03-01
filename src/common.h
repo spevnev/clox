@@ -10,6 +10,6 @@
 #define UNUSED(parameter) __attribute__((unused)) parameter##_UNUSED
 
 // #define DEBUG_PRINT_BYTECODE
-// #define DEBUG_TRACE_INSTR
+// #define DEBUG_TRACE_EXECUTION
 
 #endif  // CLOX_COMMON_H_

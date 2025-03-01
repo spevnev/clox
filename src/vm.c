@@ -112,10 +112,10 @@ static ObjUpvalue* capture_upvalue(Value* value) {
     if (current != NULL && current->location == value) return current;
 
     ObjUpvalue* new = new_upvalue(value);
+    new->next = current;
     if (prev == NULL) {
         vm.open_upvalues = new;
     } else {
-        new->next = prev->next;
         prev->next = new;
     }
 
@@ -150,7 +150,7 @@ static InterpretResult run(void) {
     } while (0)
 
     for (;;) {
-#ifdef DEBUG_TRACE_INSTR
+#ifdef DEBUG_TRACE_EXECUTION
         print_stack();
         disassemble_instr(&vm.frame->closure->function->chunk, vm.frame->ip - vm.frame->closure->function->chunk.code);
 #endif

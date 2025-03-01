@@ -397,12 +397,15 @@ static ObjFunction *end_compiler(void) {
 static void begin_scope(void) { c->scope_depth++; }
 
 static void end_scope(void) {
-    while (c->locals_count > 0 && c->locals[c->locals_count - 1].depth >= c->scope_depth) {
-        if (c->locals[c->locals_count - 1].is_captured) emit_byte(OP_CLOSE_UPVALUE);
-        else emit_byte(OP_POP);
+    c->scope_depth--;
+    while (c->locals_count > 0 && c->locals[c->locals_count - 1].depth > c->scope_depth) {
+        if (c->locals[c->locals_count - 1].is_captured) {
+            emit_byte(OP_CLOSE_UPVALUE);
+        } else {
+            emit_byte(OP_POP);
+        }
         c->locals_count--;
     }
-    c->scope_depth--;
 }
 
 static void add_local(Token name) {
