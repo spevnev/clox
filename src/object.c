@@ -107,13 +107,15 @@ ObjString *copy_string(const char *cstr, uint32_t length) {
 }
 
 ObjString *concat_strings(const ObjString *a, const ObjString *b) {
-    stack_push(VALUE_OBJECT(a));
-    stack_push(VALUE_OBJECT(b));
-
     uint32_t new_length = a->length + b->length;
     uint32_t size = sizeof(ObjString) + new_length + 1;
 
+    stack_push(VALUE_OBJECT(a));
+    stack_push(VALUE_OBJECT(b));
     ObjString *string = (ObjString *) new_object(OBJ_STRING, size);
+    stack_pop();
+    stack_pop();
+
     memcpy(string->cstr, a->cstr, a->length);
     memcpy(string->cstr + a->length, b->cstr, b->length);
     string->cstr[new_length] = '\0';
@@ -121,17 +123,10 @@ ObjString *concat_strings(const ObjString *a, const ObjString *b) {
     string->hash = hash_string(string->cstr, string->length);
 
     ObjString *interned_string = hashmap_find_key(&vm.strings, string->cstr, string->length, string->hash);
-    if (interned_string != NULL) {
-        reallocate(string, size, 0);
-        stack_pop();
-        stack_pop();
-        return interned_string;
-    }
+    if (interned_string != NULL) return interned_string;
 
     stack_push(VALUE_OBJECT(string));
     hashmap_set(&vm.strings, string, VALUE_NIL());
-    stack_pop();
-    stack_pop();
     stack_pop();
 
     return string;
