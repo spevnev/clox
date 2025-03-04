@@ -6,6 +6,7 @@
 #include "debug.h"
 #include "error.h"
 #include "lexer.h"
+#include "memory.h"
 #include "object.h"
 
 typedef enum {
@@ -113,7 +114,10 @@ static bool match(TokenType type) {
 static Chunk *current_chunk(void) { return &c->function->chunk; }
 
 static uint8_t add_constant(Value constant) {
+    stack_push(constant);
     uint32_t index = push_constant(current_chunk(), constant);
+    stack_pop();
+
     if (index >= CONSTANTS_SIZE) {
         ERROR_PREV("Too many constants in one chunk");
         return 0;
@@ -694,4 +698,10 @@ ObjFunction *compile(const char *source) {
 
     ObjFunction *script = end_compiler();
     return p.had_error ? NULL : script;
+}
+
+void mark_compiler_roots(void) {
+    for (Compiler *current = c; current != NULL; current = current->enclosing) {
+        mark_object((Object *) current->function);
+    }
 }

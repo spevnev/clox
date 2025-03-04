@@ -27,16 +27,25 @@ typedef struct {
     CallFrame frames[CALLSTACK_SIZE];
     Value* stack_top;
     Value stack[STACK_SIZE];
-    Object* objects;
     HashMap strings;  // Set of interned strings (values are always null).
     HashMap globals;
     ObjUpvalue* open_upvalues;
+    // GC
+    Object* objects;
+    uint32_t grey_capacity;
+    uint32_t grey_length;
+    Object** grey_objects;
+    size_t allocated;
+    size_t next_gc;
 } VM;
 
 extern VM vm;
 
 void init_vm(void);
 void free_vm(void);
+void stack_push(Value value);
+Value stack_pop(void);
+Value stack_peek(uint32_t distance);
 InterpretResult interpret(const char* source);
 
 #endif  // CLOX_VM_H_

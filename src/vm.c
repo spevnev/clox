@@ -7,6 +7,7 @@
 #include "compiler.h"
 #include "debug.h"
 #include "error.h"
+#include "memory.h"
 #include "native.h"
 #include "value.h"
 
@@ -41,17 +42,17 @@ static void print_stacktrace(void) {
     }
 }
 
-static void stack_push(Value value) {
+void stack_push(Value value) {
     assert(vm.stack_top - vm.stack < STACK_SIZE && "Stack overflow");
     *(vm.stack_top++) = value;
 }
 
-static Value stack_pop(void) {
+Value stack_pop(void) {
     assert(vm.stack_top > vm.stack && "Stack underflow");
     return *(--vm.stack_top);
 }
 
-static Value stack_peek(uint32_t distance) {
+Value stack_peek(uint32_t distance) {
     assert(distance < vm.stack_top - vm.stack && "Peek distance points outside of stack");
     return *(vm.stack_top - 1 - distance);
 }
@@ -243,6 +244,8 @@ static InterpretResult run(void) {
             } break;
             case OP_CLOSURE: {
                 ObjClosure* closure = new_closure((ObjFunction*) READ_CONST().as.object);
+                stack_push(VALUE_OBJECT(closure));
+
                 for (uint32_t i = 0; i < closure->upvalues_length; i++) {
                     uint8_t is_local = READ_U8();
                     uint8_t index = READ_U8();
@@ -253,7 +256,6 @@ static InterpretResult run(void) {
                         closure->upvalues[i] = vm.frame->closure->upvalues[index];
                     }
                 }
-                stack_push(VALUE_OBJECT(closure));
             } break;
             case OP_CLOSE_UPVALUE:
                 close_upvalues(vm.stack_top - 1);
@@ -292,29 +294,39 @@ static InterpretResult run(void) {
 
 void init_vm(void) {
     vm.stack_top = vm.stack;
+    vm.next_gc = GC_INITIAL_THRESHOLD;
 
     for (size_t i = 0; i < native_defs_length(); i++) {
         ObjString* name = copy_string(native_defs[i].name, strlen(native_defs[i].name));
-        hashmap_set(&vm.globals, name, VALUE_OBJECT(new_native(native_defs[i])));
+        stack_push(VALUE_OBJECT(name));
+        Value native = VALUE_OBJECT(new_native(native_defs[i]));
+        stack_push(native);
+        hashmap_set(&vm.globals, name, native);
+        stack_pop();
+        stack_pop();
     }
 }
 
 void free_vm(void) {
+    free_hashmap(&vm.strings);
+    free_hashmap(&vm.globals);
+
     Object* current = vm.objects;
     while (current != NULL) {
         Object* next = current->next;
         free_object(current);
         current = next;
     }
-    free_hashmap(&vm.strings);
-    free_hashmap(&vm.globals);
+    free(vm.grey_objects);
 }
 
 InterpretResult interpret(const char* source) {
     ObjFunction* script = compile(source);
     if (script == NULL) return RESULT_COMPILE_ERROR;
 
+    stack_push(VALUE_OBJECT(script));
     ObjClosure* closure = new_closure(script);
+    stack_pop();
     stack_push(VALUE_OBJECT(closure));
 
     // Create initial callframe.

@@ -9,5 +9,6 @@
 #define UPVALUES_SIZE (UINT8_MAX + 1)
 
 ObjFunction *compile(const char *source);
+void mark_compiler_roots(void);
 
 #endif  // CLOX_COMPILER_H_
