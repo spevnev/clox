@@ -81,10 +81,11 @@ static bool call_native(ObjNative* native, uint8_t arg_num) {
         return false;
     }
 
-    Value return_value = native->function(vm.stack_top - arg_num);
+    Value return_value;
+    if (!native->function(&return_value, vm.stack_top - arg_num)) return false;
+
     vm.stack_top -= arg_num + 1;
     stack_push(return_value);
-
     return true;
 }
 
