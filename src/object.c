@@ -19,9 +19,7 @@ static Object *new_object(ObjectType type, uint32_t size) {
 }
 
 ObjFunction *new_function(ObjString *name) {
-    stack_push(VALUE_OBJECT(name));
     ObjFunction *function = (ObjFunction *) new_object(OBJ_FUNCTION, sizeof(ObjFunction));
-    stack_pop();
     function->name = name;
     function->arity = 0;
     function->upvalues_count = 0;
@@ -55,6 +53,19 @@ ObjNative *new_native(NativeDefinition def) {
     return native;
 }
 
+ObjClass *new_class(ObjString *name) {
+    ObjClass *class = (ObjClass *) new_object(OBJ_CLASS, sizeof(ObjClass));
+    class->name = name;
+    return class;
+}
+
+ObjInstance *new_instance(ObjClass *class) {
+    ObjInstance *instance = (ObjInstance *) new_object(OBJ_INSTANCE, sizeof(ObjInstance));
+    instance->class = class;
+    instance->fields = (HashMap) {0};
+    return instance;
+}
+
 void free_object(Object *object) {
 #ifdef DEBUG_LOG_GC
     printf("%p free type %d\n", (void *) object, object->type);
@@ -72,8 +83,14 @@ void free_object(Object *object) {
             ARRAY_REALLOC(closure->upvalues, closure->upvalues_length, 0);
             reallocate(object, sizeof(ObjClosure), 0);
         } break;
-        case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
-        default:         UNREACHABLE();
+        case OBJ_NATIVE:   reallocate(object, sizeof(ObjNative), 0); break;
+        case OBJ_CLASS:    reallocate(object, sizeof(ObjClass), 0); break;
+        case OBJ_INSTANCE: {
+            ObjInstance *instance = (ObjInstance *) object;
+            free_hashmap(&instance->fields);
+            reallocate(object, sizeof(ObjInstance), 0);
+        } break;
+        default: UNREACHABLE();
     }
 }
 
@@ -84,6 +101,8 @@ void print_object(const Object *object) {
         case OBJ_UPVALUE:  printf("upvalue"); break;
         case OBJ_CLOSURE:  printf("<fn %s>", ((const ObjClosure *) object)->function->name->cstr); break;
         case OBJ_NATIVE:   printf("<native fn %s>", ((const ObjNative *) object)->name); break;
+        case OBJ_CLASS:    printf("%s", ((const ObjClass *) object)->name->cstr); break;
+        case OBJ_INSTANCE: printf("%s instance", ((const ObjInstance *) object)->class->name->cstr); break;
         default:           UNREACHABLE();
     }
 }

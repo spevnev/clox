@@ -77,6 +77,9 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         } break;
         case OP_CLOSE_UPVALUE: INSTR("close upvalue"); break;
         case OP_RETURN:        INSTR("return"); break;
+        case OP_CLASS:         CONST_INSTR("class"); break;
+        case OP_GET_FIELD:     CONST_INSTR("get field"); break;
+        case OP_SET_FIELD:     CONST_INSTR("set field"); break;
         default:               printf("unknown opcode %d\n", opcode); break;
     }
     return offset;

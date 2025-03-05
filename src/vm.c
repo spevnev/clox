@@ -95,11 +95,15 @@ static bool call_value(Value value, uint8_t arg_num) {
         switch (value.as.object->type) {
             case OBJ_CLOSURE: return call((ObjClosure*) value.as.object, arg_num);
             case OBJ_NATIVE:  return call_native((ObjNative*) value.as.object, arg_num);
-            default:          break;
+            case OBJ_CLASS:
+                vm.stack_top -= arg_num + 1;  // Ignore arguments.
+                stack_push(VALUE_OBJECT(new_instance((ObjClass*) value.as.object)));
+                return true;
+            default: break;
         }
     }
 
-    RUNTIME_ERROR("Unable to call non-function");
+    RUNTIME_ERROR("Called value must be functions or classes");
     return false;
 }
 
@@ -280,6 +284,34 @@ static InterpretResult run(void) {
 
                 // Restore return value.
                 stack_push(return_value);
+            } break;
+            case OP_CLASS:     stack_push(VALUE_OBJECT(new_class(READ_STRING()))); break;
+            case OP_GET_FIELD: {
+                if (!is_object_type(stack_peek(0), OBJ_INSTANCE)) {
+                    RUNTIME_ERROR("Only instances have fields");
+                    return RESULT_RUNTIME_ERROR;
+                }
+                ObjInstance* instance = (ObjInstance*) stack_pop().as.object;
+                ObjString* field = READ_STRING();
+
+                Value value;
+                if (!hashmap_get(&instance->fields, field, &value)) {
+                    RUNTIME_ERROR("Undefined field '%s'", field->cstr);
+                    return RESULT_RUNTIME_ERROR;
+                }
+                stack_push(value);
+            } break;
+            case OP_SET_FIELD: {
+                if (!is_object_type(stack_peek(1), OBJ_INSTANCE)) {
+                    RUNTIME_ERROR("Only instances have fields");
+                    return RESULT_RUNTIME_ERROR;
+                }
+
+                Value value = stack_pop();
+                ObjInstance* instance = (ObjInstance*) stack_pop().as.object;
+                stack_push(value);
+
+                hashmap_set(&instance->fields, READ_STRING(), value);
             } break;
             default: UNREACHABLE();
         }

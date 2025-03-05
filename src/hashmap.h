@@ -2,8 +2,9 @@
 #define CLOX_HASHMAP_H_
 
 #include "common.h"
-#include "object.h"
 #include "value.h"
+
+typedef struct ObjString ObjString;
 
 typedef struct {
     // Key must be an interned string.
@@ -25,5 +26,6 @@ bool hashmap_set(HashMap *map, ObjString *key, Value value);
 void hashmap_set_all(const HashMap *src, HashMap *dst);
 bool hashmap_delete(HashMap *map, const ObjString *key);
 ObjString *hashmap_find_key(HashMap *map, const char *cstr, uint32_t length, uint32_t hash);
+void hashmap_mark_entries(HashMap *map);
 
 #endif  // CLOX_HASHMAP_H_

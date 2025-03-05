@@ -3,6 +3,7 @@
 
 #include "chunk.h"
 #include "common.h"
+#include "hashmap.h"
 #include "native.h"
 
 typedef enum {
@@ -11,6 +12,8 @@ typedef enum {
     OBJ_UPVALUE,
     OBJ_CLOSURE,
     OBJ_NATIVE,
+    OBJ_CLASS,
+    OBJ_INSTANCE,
 } ObjectType;
 
 typedef struct Object {
@@ -19,7 +22,7 @@ typedef struct Object {
     struct Object *next;
 } Object;
 
-typedef struct {
+typedef struct ObjString {
     Object object;
     uint32_t hash;
     uint32_t length;
@@ -57,12 +60,25 @@ typedef struct {
     NativeFun function;
 } ObjNative;
 
+typedef struct {
+    Object object;
+    ObjString *name;
+} ObjClass;
+
+typedef struct {
+    Object object;
+    ObjClass *class;
+    HashMap fields;
+} ObjInstance;
+
 void print_object(const Object *object);
 void free_object(Object *object);
 ObjFunction *new_function(ObjString *name);
 ObjUpvalue *new_upvalue(Value *value);
 ObjClosure *new_closure(ObjFunction *function);
 ObjNative *new_native(NativeDefinition def);
+ObjClass *new_class(ObjString *name);
+ObjInstance *new_instance(ObjClass *class);
 ObjString *copy_string(const char *cstr, uint32_t length);
 ObjString *concat_strings(const ObjString *a, const ObjString *b);
 

@@ -3,6 +3,7 @@
 #include <string.h>
 #include "common.h"
 #include "memory.h"
+#include "object.h"
 #include "value.h"
 
 #define MAX_LOAD 0.75
@@ -116,5 +117,15 @@ ObjString *hashmap_find_key(HashMap *map, const char *cstr, uint32_t length, uin
         } else if (key->hash == hash && key->length == length && memcmp(key->cstr, cstr, length) == 0) {
             return key;
         }
+    }
+}
+
+void hashmap_mark_entries(HashMap *map) {
+    for (uint32_t i = 0; i < map->capacity; i++) {
+        Entry *entry = &map->entries[i];
+        if (entry->key == NULL) continue;
+
+        mark_object((Object *) entry->key);
+        mark_value(&entry->value);
     }
 }

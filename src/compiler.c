@@ -347,6 +347,18 @@ static void call(UNUSED(bool can_assign)) {
     emit_byte2(OP_CALL, arg_num);
 }
 
+static void dot(bool can_assign) {
+    expect(TOKEN_IDENTIFIER, "Expected field after '.'");
+    uint8_t name = identifier_constant(p.previous);
+
+    if (can_assign && match(TOKEN_EQUAL)) {
+        expression();
+        emit_byte2(OP_SET_FIELD, name);
+    } else {
+        emit_byte2(OP_GET_FIELD, name);
+    }
+}
+
 static const ParseRule rules[TOKEN_COUNT] = {
     // clang-format off
     // token                  prefix,   infix,       precedence
@@ -371,6 +383,7 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_OR]            = { NULL,     or_,         PREC_OR          },
     [TOKEN_QUESTION]      = { NULL,     conditional, PREC_CONDITIONAL },
     [TOKEN_LEFT_PAREN]    = { grouping, call,        PREC_CALL        },
+    [TOKEN_DOT]           = { NULL,     dot,         PREC_CALL        },
     // clang-format on
 };
 
@@ -379,7 +392,9 @@ static const ParseRule *get_rule(TokenType op) { return &rules[op]; }
 static void init_compiler(Compiler *compiler, FunctionType function_type, ObjString *name) {
     compiler->enclosing = c;
     compiler->function_type = function_type;
+    stack_push(VALUE_OBJECT(name));
     compiler->function = new_function(name);
+    stack_pop();
     // First slot of every function is reserved for its `ObjFunction`.
     compiler->locals_count = 1;
     c = compiler;
@@ -649,8 +664,7 @@ static void function(FunctionType type) {
             if (c->function->arity >= MAX_ARITY) ERROR_PREV("Function has too many parameters (max is %d)", MAX_ARITY);
             c->function->arity++;
             expect(TOKEN_IDENTIFIER, "Expected parameter name");
-            uint8_t var = declare_var();
-            define_var(var);
+            define_var(declare_var());
         } while (match(TOKEN_COMMA));
     }
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after parameters");
@@ -678,11 +692,24 @@ static void fun_decl(void) {
     define_var(global);
 }
 
+static void class_decl(void) {
+    advance();
+    expect(TOKEN_IDENTIFIER, "Expected class name after 'class'");
+
+    uint8_t name = identifier_constant(p.previous);
+    emit_byte2(OP_CLASS, name);
+    define_var(declare_var());
+
+    expect(TOKEN_LEFT_BRACE, "Expected '{' before class body");
+    expect(TOKEN_RIGHT_BRACE, "Unclosed '{', expected '}' after class body");
+}
+
 static void declaration(void) {
     switch (p.current.type) {
-        case TOKEN_VAR: var_decl(); break;
-        case TOKEN_FUN: fun_decl(); break;
-        default:        statement(); break;
+        case TOKEN_VAR:   var_decl(); break;
+        case TOKEN_FUN:   fun_decl(); break;
+        case TOKEN_CLASS: class_decl(); break;
+        default:          statement(); break;
     }
     if (p.is_panicking) synchronize();
 }

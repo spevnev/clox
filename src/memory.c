@@ -52,16 +52,10 @@ void mark_value(Value *value) {
 }
 
 static void mark_roots(void) {
+    hashmap_mark_entries(&vm.globals);
+
     for (Value *value = vm.stack; value < vm.stack_top; value++) {
         mark_value(value);
-    }
-
-    for (uint32_t i = 0; i < vm.globals.capacity; i++) {
-        Entry *entry = &vm.globals.entries[i];
-        if (entry->key == NULL) continue;
-
-        mark_object((Object *) entry->key);
-        mark_value(&entry->value);
     }
 
     for (CallFrame *frame = vm.frames; frame <= vm.frame; frame++) {
@@ -95,6 +89,15 @@ static void trace_object(Object *object) {
             for (uint32_t i = 0; i < closure->upvalues_length; i++) {
                 mark_object((Object *) closure->upvalues[i]);
             }
+        } break;
+        case OBJ_CLASS: {
+            ObjClass *class = (ObjClass *) object;
+            mark_object((Object *) class->name);
+        } break;
+        case OBJ_INSTANCE: {
+            ObjInstance *instance = (ObjInstance *) object;
+            mark_object((Object *) instance->class);
+            hashmap_mark_entries(&instance->fields);
         } break;
         default: UNREACHABLE();
     }
