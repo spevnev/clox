@@ -3,7 +3,7 @@
 
 #include "value.h"
 
-typedef Value (*NativeFun)(Value *args, uint8_t arg_num);
+typedef Value (*NativeFun)(Value *args);
 
 typedef struct {
     const char *name;

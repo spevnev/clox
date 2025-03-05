@@ -20,10 +20,6 @@ VM vm = {0};
         print_stacktrace();                                                  \
     } while (0)
 
-static bool is_object_type(Value value, ObjectType type) {
-    return value.type == VAL_OBJECT && value.as.object->type == type;
-}
-
 __attribute__((unused)) static void print_stack(void) {
     printf("Stack: ");
     for (const Value* value = vm.stack; value < vm.stack_top; value++) {
@@ -83,7 +79,7 @@ static bool call_native(ObjNative* native, uint8_t arg_num) {
         return false;
     }
 
-    Value return_value = native->function(vm.stack_top - arg_num, arg_num);
+    Value return_value = native->function(vm.stack_top - arg_num);
     vm.stack_top -= arg_num + 1;
     stack_push(return_value);
 
