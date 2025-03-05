@@ -1,5 +1,6 @@
 #include "compiler.h"
 #include <assert.h>
+#include <stdarg.h>
 #include <string.h>
 #include "chunk.h"
 #include "common.h"
@@ -75,16 +76,18 @@ static void statement(void);
 static void declaration(void);
 static void var_decl(void);
 
-#define ERROR(line, ...)                 \
-    do {                                 \
-        if (!p.is_panicking) {           \
-            p.is_panicking = true;       \
-            p.had_error = true;          \
-            ERROR_AT(line, __VA_ARGS__); \
-        }                                \
-    } while (0)
-#define ERROR_PREV(...) ERROR(p.previous.line, __VA_ARGS__)
-#define ERROR_CURRENT(...) ERROR(p.current.line, __VA_ARGS__)
+static void error_at(uint32_t line, const char *fmt, ...) {
+    if (p.is_panicking) return;
+    p.is_panicking = true;
+    p.had_error = true;
+
+    va_list args;
+    va_start(args, fmt);
+    error_varg(line, fmt, args);
+    va_end(args);
+}
+#define error_prev(...) error_at(p.previous.line, __VA_ARGS__)
+#define error_current(...) error_at(p.current.line, __VA_ARGS__)
 
 static bool is_next(TokenType type) { return p.current.type == type; }
 
@@ -93,7 +96,7 @@ static void advance(void) {
     for (;;) {
         p.current = next_token();
         if (p.current.type != TOKEN_ERROR) break;
-        ERROR_CURRENT(p.current.start);
+        error_current(p.current.start);
     }
 }
 
@@ -101,7 +104,7 @@ static void expect(TokenType type, const char *error_message) {
     if (p.current.type == type) {
         advance();
     } else {
-        ERROR_CURRENT(error_message);
+        error_current(error_message);
     }
 }
 
@@ -119,7 +122,7 @@ static uint8_t add_constant(Value constant) {
     stack_pop();
 
     if (index >= CONSTANTS_SIZE) {
-        ERROR_PREV("Too many constants in one chunk");
+        error_prev("Too many constants in one chunk");
         return 0;
     }
 
@@ -150,7 +153,7 @@ static uint32_t emit_jump(uint8_t jump_op) {
 static void patch_jump(uint32_t offset) {
     // -2 adjusts for the 16-bit jump operand that is already skipped.
     uint32_t jump = current_chunk()->length - offset - 2;
-    if (jump > UINT16_MAX) ERROR_AT(current_chunk()->lines[offset], "Jump target is too far");
+    if (jump > UINT16_MAX) error_at(current_chunk()->lines[offset], "Jump target is too far");
     memcpy(current_chunk()->code + offset, &jump, sizeof(uint16_t));
 }
 
@@ -159,7 +162,7 @@ static void emit_loop(uint32_t loop_start) {
     emit_byte(OP_LOOP);
     // 2 adjusts for the loop instruction and its operand.
     uint32_t offset = current_chunk()->length + 2 - loop_start;
-    if (offset > UINT16_MAX) ERROR_AT(current_chunk()->lines[offset], "Loop body is too big");
+    if (offset > UINT16_MAX) error_at(current_chunk()->lines[loop_start], "Loop body is too big");
     emit_byte2(offset & 0xFF, (offset >> 8) & 0xFF);
 }
 
@@ -168,7 +171,7 @@ static void parse_precedence(Precedence precedence) {
 
     ParseFn prefix_rule = get_rule(p.previous.type)->prefix;
     if (prefix_rule == NULL) {
-        ERROR_PREV("Expected expression");
+        error_prev("Expected expression");
         return;
     }
 
@@ -181,7 +184,7 @@ static void parse_precedence(Precedence precedence) {
         infix_rule(can_assign);
     }
 
-    if (can_assign && match(TOKEN_EQUAL)) ERROR_CURRENT("Invalid assignment target");
+    if (can_assign && match(TOKEN_EQUAL)) error_current("Invalid assignment target");
 }
 
 static void expression(void) { parse_precedence(PREC_ASSIGNMENT); }
@@ -196,7 +199,7 @@ static uint8_t add_upvalue(Compiler *c, uint8_t index, bool is_local) {
 
     uint32_t upvalue_index = c->function->upvalues_count++;
     if (upvalue_index >= UPVALUES_SIZE) {
-        ERROR_PREV("Function captures too many variables.");
+        error_prev("Function captures too many variables.");
         return 0;
     }
 
@@ -210,7 +213,7 @@ static int resolve_local(Compiler *c, Token name) {
     for (int i = c->locals_count - 1; i >= 0; i--) {
         if (!token_equals(c->locals[i].name, name)) continue;
         if (c->locals[i].depth == DEPTH_UNINITIALIZED) {
-            ERROR_PREV("Cannot read local variable '%.*s' in its own initializer", name.length, name.start);
+            error_prev("Cannot read local variable '%.*s' in its own initializer", name.length, name.start);
         }
         return i;
     }
@@ -339,7 +342,7 @@ static void call(UNUSED(bool can_assign)) {
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
             expression();
-            if (arg_num >= MAX_ARITY) ERROR_PREV("Function call has too many arguments (max is %d)", MAX_ARITY);
+            if (arg_num >= MAX_ARITY) error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
             arg_num++;
         } while (match(TOKEN_COMMA));
     }
@@ -429,7 +432,7 @@ static void end_scope(void) {
 
 static void add_local(Token name) {
     if (c->locals_count >= LOCALS_SIZE) {
-        ERROR_PREV("Too many local variables in one scope.");
+        error_prev("Too many local variables in one scope.");
         return;
     }
 
@@ -446,7 +449,7 @@ static void declare_local(void) {
         if (local->depth < c->scope_depth) break;
 
         if (token_equals(local->name, name)) {
-            ERROR_PREV("Redefinition of '%.*s'", name.length, name.start);
+            error_prev("Redefinition of '%.*s'", name.length, name.start);
         }
     }
 
@@ -607,7 +610,7 @@ static void for_stmt(void) {
 }
 
 static void return_stmt(void) {
-    if (c->function_type == FUN_SCRIPT) ERROR_CURRENT("Return outside of function");
+    if (c->function_type == FUN_SCRIPT) error_current("Return outside of function");
 
     advance();
     if (match(TOKEN_SEMICOLON)) {
@@ -661,14 +664,14 @@ static void function(FunctionType type) {
     expect(TOKEN_LEFT_PAREN, "Expected '(' after function name");
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
-            if (c->function->arity >= MAX_ARITY) ERROR_PREV("Function has too many parameters (max is %d)", MAX_ARITY);
+            if (c->function->arity >= MAX_ARITY) error_prev("Function has too many parameters (max is %d)", MAX_ARITY);
             c->function->arity++;
             expect(TOKEN_IDENTIFIER, "Expected parameter name");
             define_var(declare_var());
         } while (match(TOKEN_COMMA));
     }
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after parameters");
-    if (!is_next(TOKEN_LEFT_BRACE)) ERROR_PREV("Expected '{' before function body");
+    if (!is_next(TOKEN_LEFT_BRACE)) error_prev("Expected '{' before function body");
     block();
 
     end_scope();

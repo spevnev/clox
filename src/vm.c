@@ -13,13 +13,6 @@
 
 VM vm = {0};
 
-#define RUNTIME_ERROR(...)                                                   \
-    do {                                                                     \
-        Chunk* chunk = &vm.frame->closure->function->chunk;                  \
-        ERROR_AT(chunk->lines[vm.frame->ip - chunk->code - 1], __VA_ARGS__); \
-        print_stacktrace();                                                  \
-    } while (0)
-
 __attribute__((unused)) static void print_stack(void) {
     printf("Stack: ");
     for (const Value* value = vm.stack; value < vm.stack_top; value++) {
@@ -36,6 +29,15 @@ static void print_stacktrace(void) {
         uint32_t line = function->chunk.lines[frame->ip - function->chunk.code - 1];
         fprintf(stderr, "    '%s' at line %u\n", function->name->cstr, line);
     }
+}
+
+void runtime_error(const char* fmt, ...) {
+    Chunk* chunk = &vm.frame->closure->function->chunk;
+    va_list args;
+    va_start(args, fmt);
+    error_varg(chunk->lines[vm.frame->ip - chunk->code - 1], fmt, args);
+    va_end(args);
+    print_stacktrace();
 }
 
 void stack_push(Value value) {
@@ -55,13 +57,13 @@ Value stack_peek(uint32_t distance) {
 
 static bool call(ObjClosure* closure, uint8_t arg_num) {
     if (arg_num != closure->function->arity) {
-        RUNTIME_ERROR("Function '%s' expected %d arguments but got %d", closure->function->name->cstr,
+        runtime_error("Function '%s' expected %d arguments but got %d", closure->function->name->cstr,
                       closure->function->arity, arg_num);
         return false;
     }
 
     if (vm.frame - vm.frames + 1 == CALLSTACK_SIZE) {
-        RUNTIME_ERROR("Stack overflow");
+        runtime_error("Stack overflow");
         return false;
     }
 
@@ -75,7 +77,7 @@ static bool call(ObjClosure* closure, uint8_t arg_num) {
 
 static bool call_native(ObjNative* native, uint8_t arg_num) {
     if (arg_num != native->arity) {
-        RUNTIME_ERROR("Function '%s' expected %d arguments but got %d", native->name, native->arity, arg_num);
+        runtime_error("Function '%s' expected %d arguments but got %d", native->name, native->arity, arg_num);
         return false;
     }
 
@@ -99,7 +101,7 @@ static bool call_value(Value value, uint8_t arg_num) {
         }
     }
 
-    RUNTIME_ERROR("Called value must be functions or classes");
+    runtime_error("Called value must be functions or classes");
     return false;
 }
 
@@ -142,7 +144,7 @@ static InterpretResult run(void) {
 #define BINARY_OP(value_type, op)                                                   \
     do {                                                                            \
         if (stack_peek(0).type != VAL_NUMBER || stack_peek(1).type != VAL_NUMBER) { \
-            RUNTIME_ERROR("Operands must be numbers");                              \
+            runtime_error("Operands must be numbers");                              \
             return RESULT_RUNTIME_ERROR;                                            \
         }                                                                           \
         double b = stack_pop().as.number;                                           \
@@ -174,7 +176,7 @@ static InterpretResult run(void) {
                 } else if (stack_peek(0).type == VAL_NUMBER && stack_peek(1).type == VAL_NUMBER) {
                     stack_push(VALUE_NUMBER(stack_pop().as.number + stack_pop().as.number));
                 } else {
-                    RUNTIME_ERROR("Operands must both be numbers or strings");
+                    runtime_error("Operands must both be numbers or strings");
                     return RESULT_RUNTIME_ERROR;
                 }
                 break;
@@ -184,7 +186,7 @@ static InterpretResult run(void) {
             case OP_NOT:      stack_push(VALUE_BOOL(!value_is_truthy(stack_pop()))); break;
             case OP_NEGATE:
                 if (stack_peek(0).type != VAL_NUMBER) {
-                    RUNTIME_ERROR("Operand must be a number");
+                    runtime_error("Operand must be a number");
                     return RESULT_RUNTIME_ERROR;
                 }
                 (vm.stack_top - 1)->as.number *= -1;
@@ -200,7 +202,7 @@ static InterpretResult run(void) {
                 ObjString* name = READ_STRING();
                 Value value;
                 if (!hashmap_get(&vm.globals, name, &value)) {
-                    RUNTIME_ERROR("Undefined variable '%s'", name->cstr);
+                    runtime_error("Undefined variable '%s'", name->cstr);
                     return RESULT_RUNTIME_ERROR;
                 }
                 stack_push(value);
@@ -210,7 +212,7 @@ static InterpretResult run(void) {
                 // Set doesn't pop since assignment expression should evaluate to the RHS.
                 if (hashmap_set(&vm.globals, name, stack_peek(0))) {
                     hashmap_delete(&vm.globals, name);
-                    RUNTIME_ERROR("Undefined variable '%s'", name->cstr);
+                    runtime_error("Undefined variable '%s'", name->cstr);
                     return RESULT_RUNTIME_ERROR;
                 }
             } break;
@@ -284,7 +286,7 @@ static InterpretResult run(void) {
             case OP_CLASS:     stack_push(VALUE_OBJECT(new_class(READ_STRING()))); break;
             case OP_GET_FIELD: {
                 if (!is_object_type(stack_peek(0), OBJ_INSTANCE)) {
-                    RUNTIME_ERROR("Only instances have fields");
+                    runtime_error("Only instances have fields");
                     return RESULT_RUNTIME_ERROR;
                 }
                 ObjInstance* instance = (ObjInstance*) stack_pop().as.object;
@@ -292,14 +294,14 @@ static InterpretResult run(void) {
 
                 Value value;
                 if (!hashmap_get(&instance->fields, field, &value)) {
-                    RUNTIME_ERROR("Undefined field '%s'", field->cstr);
+                    runtime_error("Undefined field '%s'", field->cstr);
                     return RESULT_RUNTIME_ERROR;
                 }
                 stack_push(value);
             } break;
             case OP_SET_FIELD: {
                 if (!is_object_type(stack_peek(1), OBJ_INSTANCE)) {
-                    RUNTIME_ERROR("Only instances have fields");
+                    runtime_error("Only instances have fields");
                     return RESULT_RUNTIME_ERROR;
                 }
 

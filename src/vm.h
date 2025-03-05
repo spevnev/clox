@@ -43,6 +43,7 @@ extern VM vm;
 
 void init_vm(void);
 void free_vm(void);
+void runtime_error(const char* fmt, ...);
 void stack_push(Value value);
 Value stack_pop(void);
 Value stack_peek(uint32_t distance);
