@@ -72,10 +72,14 @@ typedef struct Compiler {
 
 typedef struct ClassCompiler {
     struct ClassCompiler *enclosing;
+    bool has_superclass;
 } ClassCompiler;
 
 // Name of top-level function
 #define SCRIPT_NAME "<script>"
+
+static const Token this_token = {.start = "this", .length = 4};
+static const Token super_token = {.start = "super", .length = 5};
 
 static Parser p = {0};
 static Compiler *c = NULL;
@@ -281,6 +285,19 @@ static void named_var(Token token, bool can_assign) {
     }
 }
 
+static uint8_t args(void) {
+    uint8_t arg_num = 0;
+    if (!is_next(TOKEN_RIGHT_PAREN)) {
+        do {
+            expression();
+            if (arg_num >= MAX_ARITY) error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
+            arg_num++;
+        } while (match(TOKEN_COMMA));
+    }
+    expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after arguments");
+    return arg_num;
+}
+
 static void nil(UNUSED(bool can_assign)) { emit_byte(OP_NIL); }
 static void true_(UNUSED(bool can_assign)) { emit_byte(OP_TRUE); }
 static void false_(UNUSED(bool can_assign)) { emit_byte(OP_FALSE); }
@@ -299,6 +316,31 @@ static void this(UNUSED(bool can_assign)) {
 
     // Treat `this` as a local variable.
     variable(false);
+}
+
+static void super(UNUSED(bool can_assign)) {
+    if (cc == NULL) {
+        error_prev("Cannot use 'super' outside of a method");
+        return;
+    }
+    if (!cc->has_superclass) {
+        error_prev("Cannot use 'super' in a class without superclass");
+        return;
+    }
+
+    expect(TOKEN_DOT, "Expected '.' after 'super'");
+    expect(TOKEN_IDENTIFIER, "Expected superclass method name after 'super'");
+    uint8_t name = identifier_constant(p.previous);
+
+    named_var(this_token, false);
+    if (match(TOKEN_LEFT_PAREN)) {
+        uint8_t arg_num = args();
+        named_var(super_token, false);
+        emit_byte3(OP_SUPER_INVOKE, name, arg_num);
+    } else {
+        named_var(super_token, false);
+        emit_byte2(OP_GET_SUPER, name);
+    }
 }
 
 static void grouping(UNUSED(bool can_assign)) {
@@ -371,19 +413,6 @@ static void conditional(UNUSED(bool can_assign)) {
     patch_jump(jump_over_else);
 }
 
-static uint8_t args(void) {
-    uint8_t arg_num = 0;
-    if (!is_next(TOKEN_RIGHT_PAREN)) {
-        do {
-            expression();
-            if (arg_num >= MAX_ARITY) error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
-            arg_num++;
-        } while (match(TOKEN_COMMA));
-    }
-    expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after arguments");
-    return arg_num;
-}
-
 static void call(UNUSED(bool can_assign)) { emit_byte2(OP_CALL, args()); }
 
 static void dot(bool can_assign) {
@@ -411,6 +440,7 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_STRING]        = { string,   NULL,        PREC_NONE        },
     [TOKEN_IDENTIFIER]    = { variable, NULL,        PREC_NONE        },
     [TOKEN_THIS]          = { this,     NULL,        PREC_NONE        },
+    [TOKEN_SUPER]         = { super,    NULL,        PREC_NONE        },
     [TOKEN_BANG]          = { unary,    NULL,        PREC_NONE        },
     [TOKEN_MINUS]         = { unary,    binary,      PREC_TERM        },
     [TOKEN_PLUS]          = { NULL,     binary,      PREC_TERM        },
@@ -444,7 +474,7 @@ static void init_compiler(Compiler *compiler, FunctionType function_type, ObjStr
     compiler->locals_count = 1;
     if (function_type == FUN_METHOD || function_type == FUN_INITIALIZER) {
         compiler->locals[0] = (Local) {
-            .name = {.start = "this", .length = 4},
+            .name = this_token,
             .depth = 0,
             .is_captured = false,
         };
@@ -756,7 +786,23 @@ static void class_decl(void) {
     emit_byte2(OP_CLASS, identifier_constant(class_name));
     define_var(declare_var());
 
-    // Load the class back onto the stack (by name) to be used as OP_METHOD operand.
+    if (match(TOKEN_LESS)) {
+        expect(TOKEN_IDENTIFIER, "Expected superclass name after '<'");
+        if (token_equals(p.previous, class_name)) error_prev("Class cannot inherit from itself");
+
+        begin_scope();
+        named_var(p.previous, false);
+        add_local(super_token);
+        mark_initialized();
+
+        // Load the class back onto the stack to be used in OP_INHERIT.
+        named_var(class_name, false);
+        emit_byte(OP_INHERIT);
+
+        cc->has_superclass = true;
+    }
+
+    // Load the class back onto the stack to be used in OP_METHOD.
     named_var(class_name, false);
     expect(TOKEN_LEFT_BRACE, "Expected '{' before class body");
     while (!is_next(TOKEN_EOF) && !is_next(TOKEN_RIGHT_BRACE)) {
@@ -770,8 +816,9 @@ static void class_decl(void) {
         emit_byte2(OP_METHOD, name);
     }
     expect(TOKEN_RIGHT_BRACE, "Unclosed '{', expected '}' after class body");
-    emit_byte(OP_POP);
+    emit_byte(OP_POP);  // Pop class.
 
+    if (cc->has_superclass) end_scope();
     cc = class_compiler.enclosing;
 }
 

@@ -212,8 +212,6 @@ static InterpretResult run(void) {
             case OP_DEFINE_GLOBAL: {
                 ObjString* name = READ_STRING();
                 hashmap_set(&vm.globals, name, stack_peek(0));
-                // Pop is performed after adding to hashmap to prevent GC from
-                // freeing the value after pop but before set.
                 stack_pop();
             } break;
             case OP_GET_GLOBAL: {
@@ -307,6 +305,16 @@ static InterpretResult run(void) {
                 hashmap_set(&class->methods, READ_STRING(), stack_peek(0));
                 stack_pop();
             } break;
+            case OP_INHERIT: {
+                if (!is_object_type(stack_peek(1), OBJ_CLASS)) {
+                    runtime_error("Superclass must be a class");
+                    return RESULT_RUNTIME_ERROR;
+                }
+                ObjClass* superclass = (ObjClass*) stack_peek(1).as.object;
+                ObjClass* subclass = (ObjClass*) stack_peek(0).as.object;
+                hashmap_set_all(&superclass->methods, &subclass->methods);
+                stack_pop();
+            } break;
             case OP_GET_FIELD: {
                 if (!is_object_type(stack_peek(0), OBJ_INSTANCE)) {
                     runtime_error("Only instances have fields");
@@ -347,12 +355,11 @@ static InterpretResult run(void) {
                 ObjString* name = READ_STRING();
                 uint8_t arg_num = READ_U8();
 
-                Value instance_value = stack_peek(arg_num);
-                if (!is_object_type(instance_value, OBJ_INSTANCE)) {
+                if (!is_object_type(stack_peek(arg_num), OBJ_INSTANCE)) {
                     runtime_error("Only instances have fields");
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
+                ObjInstance* instance = (ObjInstance*) stack_peek(arg_num).as.object;
 
                 Value value;
                 if (hashmap_get(&instance->fields, name, &value)) {
@@ -366,6 +373,32 @@ static InterpretResult run(void) {
                 }
                 runtime_error("Undefined field '%s'", name->cstr);
                 return RESULT_RUNTIME_ERROR;
+            } break;
+            case OP_GET_SUPER: {
+                ObjString* name = READ_STRING();
+                ObjClass* superclass = (ObjClass*) stack_pop().as.object;
+
+                Value value;
+                if (!hashmap_get(&superclass->methods, name, &value)) {
+                    runtime_error("Undefined superclass method '%s'", name->cstr);
+                    return RESULT_RUNTIME_ERROR;
+                }
+
+                ObjBoundMethod* bound_method = new_bound_method(stack_peek(0), (ObjClosure*) value.as.object);
+                stack_pop();
+                stack_push(VALUE_OBJECT(bound_method));
+            } break;
+            case OP_SUPER_INVOKE: {
+                ObjString* name = READ_STRING();
+                uint8_t arg_num = READ_U8();
+                ObjClass* superclass = (ObjClass*) stack_pop().as.object;
+
+                Value value;
+                if (!hashmap_get(&superclass->methods, name, &value)) {
+                    runtime_error("Undefined superclass method '%s'", name->cstr);
+                    return RESULT_RUNTIME_ERROR;
+                }
+                if (!call((ObjClosure*) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
             } break;
             default: UNREACHABLE();
         }
