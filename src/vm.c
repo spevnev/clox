@@ -94,10 +94,27 @@ static bool call_value(Value value, uint8_t arg_num) {
         switch (value.as.object->type) {
             case OBJ_CLOSURE: return call((ObjClosure*) value.as.object, arg_num);
             case OBJ_NATIVE:  return call_native((ObjNative*) value.as.object, arg_num);
-            case OBJ_CLASS:
-                vm.stack_top -= arg_num + 1;  // Ignore arguments.
-                stack_push(VALUE_OBJECT(new_instance((ObjClass*) value.as.object)));
+            case OBJ_CLASS:   {
+                ObjClass* class = (ObjClass*) value.as.object;
+                Value instance = VALUE_OBJECT(new_instance(class));
+                *(vm.stack_top - arg_num - 1) = instance;
+
+                Value init_value;
+                if (hashmap_get(&class->methods, vm.init_string, &init_value)) {
+                    return call((ObjClosure*) init_value.as.object, arg_num);
+                } else if (arg_num != 0) {
+                    runtime_error("Class '%s' has no constructor, expected 0 arguments but got %d", class->name->cstr,
+                                  arg_num);
+                    return false;
+                }
+
                 return true;
+            }
+            case OBJ_BOUND_METHOD: {
+                ObjBoundMethod* bound_method = (ObjBoundMethod*) value.as.object;
+                *(vm.stack_top - arg_num - 1) = bound_method->instance;
+                return call(bound_method->method, arg_num);
+            }
             default: break;
         }
     }
@@ -284,21 +301,35 @@ static InterpretResult run(void) {
                 // Restore return value.
                 stack_push(return_value);
             } break;
-            case OP_CLASS:     stack_push(VALUE_OBJECT(new_class(READ_STRING()))); break;
+            case OP_CLASS:  stack_push(VALUE_OBJECT(new_class(READ_STRING()))); break;
+            case OP_METHOD: {
+                ObjClass* class = (ObjClass*) stack_peek(1).as.object;
+                hashmap_set(&class->methods, READ_STRING(), stack_peek(0));
+                stack_pop();
+            } break;
             case OP_GET_FIELD: {
                 if (!is_object_type(stack_peek(0), OBJ_INSTANCE)) {
                     runtime_error("Only instances have fields");
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*) stack_pop().as.object;
+                ObjInstance* instance = (ObjInstance*) stack_peek(0).as.object;
                 ObjString* field = READ_STRING();
 
                 Value value;
-                if (!hashmap_get(&instance->fields, field, &value)) {
-                    runtime_error("Undefined field '%s'", field->cstr);
-                    return RESULT_RUNTIME_ERROR;
+                if (hashmap_get(&instance->fields, field, &value)) {
+                    stack_pop();
+                    stack_push(value);
+                    break;
                 }
-                stack_push(value);
+                if (hashmap_get(&instance->class->methods, field, &value)) {
+                    ObjBoundMethod* bound_method = new_bound_method(stack_peek(0), (ObjClosure*) value.as.object);
+                    stack_pop();
+                    stack_push(VALUE_OBJECT(bound_method));
+                    break;
+                }
+
+                runtime_error("Undefined field '%s'", field->cstr);
+                return RESULT_RUNTIME_ERROR;
             } break;
             case OP_SET_FIELD: {
                 if (!is_object_type(stack_peek(1), OBJ_INSTANCE)) {
@@ -311,6 +342,30 @@ static InterpretResult run(void) {
                 stack_push(value);
 
                 hashmap_set(&instance->fields, READ_STRING(), value);
+            } break;
+            case OP_INVOKE: {
+                ObjString* name = READ_STRING();
+                uint8_t arg_num = READ_U8();
+
+                Value instance_value = stack_peek(arg_num);
+                if (!is_object_type(instance_value, OBJ_INSTANCE)) {
+                    runtime_error("Only instances have fields");
+                    return RESULT_RUNTIME_ERROR;
+                }
+                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
+
+                Value value;
+                if (hashmap_get(&instance->fields, name, &value)) {
+                    *(vm.stack_top - arg_num - 1) = value;
+                    if (!call_value(value, arg_num)) return RESULT_RUNTIME_ERROR;
+                    break;
+                }
+                if (hashmap_get(&instance->class->methods, name, &value)) {
+                    if (!call((ObjClosure*) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
+                    break;
+                }
+                runtime_error("Undefined field '%s'", name->cstr);
+                return RESULT_RUNTIME_ERROR;
             } break;
             default: UNREACHABLE();
         }
@@ -326,6 +381,8 @@ static InterpretResult run(void) {
 void init_vm(void) {
     vm.stack_top = vm.stack;
     vm.next_gc = GC_INITIAL_THRESHOLD;
+
+    vm.init_string = copy_string("init", 4);
 
     for (size_t i = 0; i < native_defs_length(); i++) {
         ObjString* name = copy_string(native_defs[i].name, strlen(native_defs[i].name));

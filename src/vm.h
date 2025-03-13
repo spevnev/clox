@@ -30,6 +30,7 @@ typedef struct {
     HashMap strings;  // Set of interned strings (values are always null).
     HashMap globals;
     ObjUpvalue* open_upvalues;
+    ObjString* init_string;
     // GC
     Object* objects;
     uint32_t grey_capacity;

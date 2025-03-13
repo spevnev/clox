@@ -35,8 +35,12 @@ ObjUpvalue *new_upvalue(Value *value) {
 }
 
 ObjClosure *new_closure(ObjFunction *function) {
-    ObjUpvalue **upvalues = reallocate(NULL, 0, sizeof(*upvalues) * function->upvalues_count);
-    for (uint32_t i = 0; i < function->upvalues_count; i++) upvalues[i] = NULL;
+    ObjUpvalue **upvalues = NULL;
+    if (function->upvalues_count > 0) {
+        size_t upvalues_size = sizeof(*upvalues) * function->upvalues_count;
+        upvalues = reallocate(NULL, 0, upvalues_size);
+        memset(upvalues, 0, upvalues_size);
+    }
 
     ObjClosure *closure = (ObjClosure *) new_object(OBJ_CLOSURE, sizeof(ObjClosure));
     closure->function = function;
@@ -56,6 +60,7 @@ ObjNative *new_native(NativeDefinition def) {
 ObjClass *new_class(ObjString *name) {
     ObjClass *class = (ObjClass *) new_object(OBJ_CLASS, sizeof(ObjClass));
     class->name = name;
+    class->methods = (HashMap) {0};
     return class;
 }
 
@@ -64,6 +69,13 @@ ObjInstance *new_instance(ObjClass *class) {
     instance->class = class;
     instance->fields = (HashMap) {0};
     return instance;
+}
+
+ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method) {
+    ObjBoundMethod *bound_method = (ObjBoundMethod *) new_object(OBJ_BOUND_METHOD, sizeof(ObjBoundMethod));
+    bound_method->instance = instance;
+    bound_method->method = method;
+    return bound_method;
 }
 
 void free_object(Object *object) {
@@ -83,14 +95,19 @@ void free_object(Object *object) {
             ARRAY_REALLOC(closure->upvalues, closure->upvalues_length, 0);
             reallocate(object, sizeof(ObjClosure), 0);
         } break;
-        case OBJ_NATIVE:   reallocate(object, sizeof(ObjNative), 0); break;
-        case OBJ_CLASS:    reallocate(object, sizeof(ObjClass), 0); break;
+        case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
+        case OBJ_CLASS:  {
+            ObjClass *class = (ObjClass *) object;
+            free_hashmap(&class->methods);
+            reallocate(object, sizeof(ObjClass), 0);
+        } break;
         case OBJ_INSTANCE: {
             ObjInstance *instance = (ObjInstance *) object;
             free_hashmap(&instance->fields);
             reallocate(object, sizeof(ObjInstance), 0);
         } break;
-        default: UNREACHABLE();
+        case OBJ_BOUND_METHOD: reallocate(object, sizeof(ObjBoundMethod), 0); break;
+        default:               UNREACHABLE();
     }
 }
 
@@ -103,7 +120,10 @@ void print_object(const Object *object) {
         case OBJ_NATIVE:   printf("<native fn %s>", ((const ObjNative *) object)->name); break;
         case OBJ_CLASS:    printf("%s", ((const ObjClass *) object)->name->cstr); break;
         case OBJ_INSTANCE: printf("%s instance", ((const ObjInstance *) object)->class->name->cstr); break;
-        default:           UNREACHABLE();
+        case OBJ_BOUND_METHOD:
+            printf("<fn %s>", ((const ObjBoundMethod *) object)->method->function->name->cstr);
+            break;
+        default: UNREACHABLE();
     }
 }
 

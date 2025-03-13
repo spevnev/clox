@@ -78,9 +78,17 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_CLOSE_UPVALUE: INSTR("close upvalue"); break;
         case OP_RETURN:        INSTR("return"); break;
         case OP_CLASS:         CONST_INSTR("class"); break;
+        case OP_METHOD:        CONST_INSTR("method"); break;
         case OP_GET_FIELD:     CONST_INSTR("get field"); break;
         case OP_SET_FIELD:     CONST_INSTR("set field"); break;
-        default:               printf("unknown opcode %d\n", opcode); break;
+        case OP_INVOKE:        {
+            uint8_t constant = READ_U8();
+            uint8_t arg_num = READ_U8();
+            printf("invoke %u '", constant);
+            print_value(chunk->constants.values[constant]);
+            printf("' %u\n", arg_num);
+        } break;
+        default: printf("unknown opcode %d\n", opcode); break;
     }
     return offset;
 

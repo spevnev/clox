@@ -52,6 +52,7 @@ void mark_value(Value *value) {
 }
 
 static void mark_roots(void) {
+    mark_object((Object *) vm.init_string);
     hashmap_mark_entries(&vm.globals);
 
     for (Value *value = vm.stack; value < vm.stack_top; value++) {
@@ -93,11 +94,17 @@ static void trace_object(Object *object) {
         case OBJ_CLASS: {
             ObjClass *class = (ObjClass *) object;
             mark_object((Object *) class->name);
+            hashmap_mark_entries(&class->methods);
         } break;
         case OBJ_INSTANCE: {
             ObjInstance *instance = (ObjInstance *) object;
             mark_object((Object *) instance->class);
             hashmap_mark_entries(&instance->fields);
+        } break;
+        case OBJ_BOUND_METHOD: {
+            ObjBoundMethod *bound_method = (ObjBoundMethod *) object;
+            mark_value(&bound_method->instance);
+            mark_object((Object *) bound_method->method);
         } break;
         default: UNREACHABLE();
     }

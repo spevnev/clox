@@ -14,6 +14,7 @@ typedef enum {
     OBJ_NATIVE,
     OBJ_CLASS,
     OBJ_INSTANCE,
+    OBJ_BOUND_METHOD,
 } ObjectType;
 
 typedef struct Object {
@@ -63,6 +64,7 @@ typedef struct {
 typedef struct {
     Object object;
     ObjString *name;
+    HashMap methods;
 } ObjClass;
 
 typedef struct {
@@ -70,6 +72,12 @@ typedef struct {
     ObjClass *class;
     HashMap fields;
 } ObjInstance;
+
+typedef struct {
+    Object object;
+    Value instance;
+    ObjClosure *method;
+} ObjBoundMethod;
 
 static inline bool is_object_type(Value value, ObjectType type) {
     return value.type == VAL_OBJECT && value.as.object->type == type;
@@ -83,6 +91,7 @@ ObjClosure *new_closure(ObjFunction *function);
 ObjNative *new_native(NativeDefinition def);
 ObjClass *new_class(ObjString *name);
 ObjInstance *new_instance(ObjClass *class);
+ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method);
 ObjString *copy_string(const char *cstr, uint32_t length);
 ObjString *concat_strings(const ObjString *a, const ObjString *b);
 

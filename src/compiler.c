@@ -48,7 +48,12 @@ typedef struct {
 
 #define DEPTH_UNINITIALIZED -1
 
-typedef enum { FUN_SCRIPT, FUN_FUNCTION } FunctionType;
+typedef enum {
+    FUN_SCRIPT,
+    FUN_FUNCTION,
+    FUN_METHOD,
+    FUN_INITIALIZER,
+} FunctionType;
 
 typedef struct {
     bool is_local;
@@ -65,11 +70,16 @@ typedef struct Compiler {
     Upvalue upvalues[UPVALUES_SIZE];
 } Compiler;
 
+typedef struct ClassCompiler {
+    struct ClassCompiler *enclosing;
+} ClassCompiler;
+
 // Name of top-level function
 #define SCRIPT_NAME "<script>"
 
 static Parser p = {0};
 static Compiler *c = NULL;
+static ClassCompiler *cc = NULL;
 
 static const ParseRule *get_rule(TokenType op);
 static void statement(void);
@@ -134,10 +144,14 @@ static uint8_t identifier_constant(Token token) {
 }
 
 static void emit_byte(uint8_t byte) { push_byte(current_chunk(), byte, p.previous.line); }
-
 static void emit_byte2(uint8_t byte1, uint8_t byte2) {
     emit_byte(byte1);
     emit_byte(byte2);
+}
+static void emit_byte3(uint8_t byte1, uint8_t byte2, uint8_t byte3) {
+    emit_byte(byte1);
+    emit_byte(byte2);
+    emit_byte(byte3);
 }
 
 static void emit_constant(Value constant) { emit_byte2(OP_CONSTANT, add_constant(constant)); }
@@ -164,6 +178,16 @@ static void emit_loop(uint32_t loop_start) {
     uint32_t offset = current_chunk()->length + 2 - loop_start;
     if (offset > UINT16_MAX) error_at(current_chunk()->lines[loop_start], "Loop body is too big");
     emit_byte2(offset & 0xFF, (offset >> 8) & 0xFF);
+}
+
+// Implicit return, emits `nil` for functions, and instance (stored in the reserved slot) for `init` method.
+static void emit_return(void) {
+    if (c->function_type == FUN_INITIALIZER) {
+        emit_byte2(OP_GET_LOCAL, 0);
+    } else {
+        emit_byte(OP_NIL);
+    }
+    emit_byte(OP_RETURN);
 }
 
 static void parse_precedence(Precedence precedence) {
@@ -267,6 +291,16 @@ static void string(UNUSED(bool can_assign)) {
 
 static void variable(bool can_assign) { named_var(p.previous, can_assign); }
 
+static void this(UNUSED(bool can_assign)) {
+    if (cc == NULL) {
+        error_prev("Cannot use 'this' outside of a method");
+        return;
+    }
+
+    // Treat `this` as a local variable.
+    variable(false);
+}
+
 static void grouping(UNUSED(bool can_assign)) {
     expression();
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after expression");
@@ -337,7 +371,7 @@ static void conditional(UNUSED(bool can_assign)) {
     patch_jump(jump_over_else);
 }
 
-static void call(UNUSED(bool can_assign)) {
+static uint8_t args(void) {
     uint8_t arg_num = 0;
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
@@ -347,8 +381,10 @@ static void call(UNUSED(bool can_assign)) {
         } while (match(TOKEN_COMMA));
     }
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after arguments");
-    emit_byte2(OP_CALL, arg_num);
+    return arg_num;
 }
+
+static void call(UNUSED(bool can_assign)) { emit_byte2(OP_CALL, args()); }
 
 static void dot(bool can_assign) {
     expect(TOKEN_IDENTIFIER, "Expected field after '.'");
@@ -357,6 +393,9 @@ static void dot(bool can_assign) {
     if (can_assign && match(TOKEN_EQUAL)) {
         expression();
         emit_byte2(OP_SET_FIELD, name);
+    } else if (match(TOKEN_LEFT_PAREN)) {
+        uint8_t arg_num = args();
+        emit_byte3(OP_INVOKE, name, arg_num);
     } else {
         emit_byte2(OP_GET_FIELD, name);
     }
@@ -371,6 +410,7 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_NUMBER]        = { number,   NULL,        PREC_NONE        },
     [TOKEN_STRING]        = { string,   NULL,        PREC_NONE        },
     [TOKEN_IDENTIFIER]    = { variable, NULL,        PREC_NONE        },
+    [TOKEN_THIS]          = { this,     NULL,        PREC_NONE        },
     [TOKEN_BANG]          = { unary,    NULL,        PREC_NONE        },
     [TOKEN_MINUS]         = { unary,    binary,      PREC_TERM        },
     [TOKEN_PLUS]          = { NULL,     binary,      PREC_TERM        },
@@ -395,23 +435,32 @@ static const ParseRule *get_rule(TokenType op) { return &rules[op]; }
 static void init_compiler(Compiler *compiler, FunctionType function_type, ObjString *name) {
     compiler->enclosing = c;
     compiler->function_type = function_type;
+
     stack_push(VALUE_OBJECT(name));
     compiler->function = new_function(name);
     stack_pop();
-    // First slot of every function is reserved for its `ObjFunction`.
+
+    // First slot is reserved for instance (this) in methods, or closure in functions.
     compiler->locals_count = 1;
+    if (function_type == FUN_METHOD || function_type == FUN_INITIALIZER) {
+        compiler->locals[0] = (Local) {
+            .name = {.start = "this", .length = 4},
+            .depth = 0,
+            .is_captured = false,
+        };
+    }
+
     c = compiler;
 }
 
 static ObjFunction *end_compiler(void) {
-    // Implicitly return nil at the end of the function.
-    emit_byte2(OP_NIL, OP_RETURN);
-    ObjFunction *function = c->function;
+    emit_return();
 
 #ifdef DEBUG_PRINT_BYTECODE
     if (!p.had_error) disassemble_chunk(current_chunk(), c->function->name->cstr);
 #endif
 
+    ObjFunction *function = c->function;
     c = c->enclosing;
     return function;
 }
@@ -610,17 +659,18 @@ static void for_stmt(void) {
 }
 
 static void return_stmt(void) {
-    if (c->function_type == FUN_SCRIPT) error_current("Return outside of function");
-
     advance();
+    if (c->function_type == FUN_SCRIPT) error_prev("Return outside of function");
+
     if (match(TOKEN_SEMICOLON)) {
-        // No return value.
-        emit_byte(OP_NIL);
+        emit_return();
     } else {
+        if (c->function_type == FUN_INITIALIZER) error_current("Cannot return a value from initializer");
+
         expression();
         expect(TOKEN_SEMICOLON, "Expected ';' after return");
+        emit_byte(OP_RETURN);
     }
-    emit_byte(OP_RETURN);
 }
 
 static void statement(void) {
@@ -696,15 +746,33 @@ static void fun_decl(void) {
 }
 
 static void class_decl(void) {
+    ClassCompiler class_compiler = {.enclosing = cc};
+    cc = &class_compiler;
+
     advance();
     expect(TOKEN_IDENTIFIER, "Expected class name after 'class'");
+    Token class_name = p.previous;
 
-    uint8_t name = identifier_constant(p.previous);
-    emit_byte2(OP_CLASS, name);
+    emit_byte2(OP_CLASS, identifier_constant(class_name));
     define_var(declare_var());
 
+    // Load the class back onto the stack (by name) to be used as OP_METHOD operand.
+    named_var(class_name, false);
     expect(TOKEN_LEFT_BRACE, "Expected '{' before class body");
+    while (!is_next(TOKEN_EOF) && !is_next(TOKEN_RIGHT_BRACE)) {
+        expect(TOKEN_IDENTIFIER, "Expected method name");
+        uint8_t name = identifier_constant(p.previous);
+
+        FunctionType fun_type = FUN_METHOD;
+        if (p.previous.length == 4 && memcmp(p.previous.start, "init", 4) == 0) fun_type = FUN_INITIALIZER;
+        function(fun_type);
+
+        emit_byte2(OP_METHOD, name);
+    }
     expect(TOKEN_RIGHT_BRACE, "Unclosed '{', expected '}' after class body");
+    emit_byte(OP_POP);
+
+    cc = class_compiler.enclosing;
 }
 
 static void declaration(void) {
