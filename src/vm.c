@@ -52,7 +52,7 @@ Value stack_pop(void) {
 
 Value stack_peek(uint32_t distance) {
     assert(distance < vm.stack_top - vm.stack && "Peek distance points outside of stack");
-    return *(vm.stack_top - 1 - distance);
+    return *(vm.stack_top - distance - 1);
 }
 
 static bool call(ObjClosure* closure, uint8_t arg_num) {
@@ -103,7 +103,7 @@ static bool call_value(Value value, uint8_t arg_num) {
                 if (hashmap_get(&class->methods, vm.init_string, &init_value)) {
                     return call((ObjClosure*) init_value.as.object, arg_num);
                 } else if (arg_num != 0) {
-                    runtime_error("Class '%s' has no constructor, expected 0 arguments but got %d", class->name->cstr,
+                    runtime_error("Class '%s' has no initializer, expected 0 arguments but got %d", class->name->cstr,
                                   arg_num);
                     return false;
                 }

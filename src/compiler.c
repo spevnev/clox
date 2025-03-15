@@ -290,7 +290,7 @@ static uint8_t args(void) {
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
             expression();
-            if (arg_num >= MAX_ARITY) error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
+            if (arg_num == MAX_ARITY) error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
             arg_num++;
         } while (match(TOKEN_COMMA));
     }
@@ -309,10 +309,7 @@ static void string(UNUSED(bool can_assign)) {
 static void variable(bool can_assign) { named_var(p.previous, can_assign); }
 
 static void this(UNUSED(bool can_assign)) {
-    if (cc == NULL) {
-        error_prev("Cannot use 'this' outside of a method");
-        return;
-    }
+    if (cc == NULL) error_prev("Cannot use 'this' outside of a method");
 
     // Treat `this` as a local variable.
     variable(false);
@@ -321,11 +318,8 @@ static void this(UNUSED(bool can_assign)) {
 static void super(UNUSED(bool can_assign)) {
     if (cc == NULL) {
         error_prev("Cannot use 'super' outside of a method");
-        return;
-    }
-    if (!cc->has_superclass) {
+    } else if (!cc->has_superclass) {
         error_prev("Cannot use 'super' in a class without superclass");
-        return;
     }
 
     expect(TOKEN_DOT, "Expected '.' after 'super'");
@@ -526,10 +520,7 @@ static void declare_local(void) {
     for (int i = c->locals_count - 1; i >= 0; i--) {
         Local *local = &c->locals[i];
         if (local->depth < c->scope_depth) break;
-
-        if (token_equals(local->name, name)) {
-            error_prev("Redefinition of '%.*s'", name.length, name.start);
-        }
+        if (token_equals(local->name, name)) error_prev("Redefinition of '%.*s'", name.length, name.start);
     }
 
     add_local(name);
@@ -744,7 +735,7 @@ static void function(FunctionType type) {
     expect(TOKEN_LEFT_PAREN, "Expected '(' after function name");
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
-            if (c->function->arity >= MAX_ARITY) error_prev("Function has too many parameters (max is %d)", MAX_ARITY);
+            if (c->function->arity == MAX_ARITY) error_prev("Function has too many parameters (max is %d)", MAX_ARITY);
             c->function->arity++;
             expect(TOKEN_IDENTIFIER, "Expected parameter name");
             define_var(declare_var());
