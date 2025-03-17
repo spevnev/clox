@@ -46,15 +46,20 @@ typedef enum {
 } OpCode;
 
 typedef struct {
+    uint32_t line;
+    uint32_t column;
+} Loc;
+
+typedef struct {
     uint32_t length;
     uint32_t capacity;
     uint8_t *code;
-    uint32_t *lines;
+    Loc *locs;
     ValueVec constants;
 } Chunk;
 
 void free_chunk(Chunk *chunk);
-void push_byte(Chunk *chunk, uint8_t byte, uint32_t line);
+void push_byte(Chunk *chunk, uint8_t byte, Loc loc);
 uint32_t push_constant(Chunk *chunk, Value value);
 
 #endif  // CLOX_CHUNK_H_

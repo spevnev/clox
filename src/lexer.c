@@ -4,12 +4,19 @@
 
 static Lexer l = {0};
 
+static Loc get_loc(void) {
+    return ((Loc) {
+        .line = l.line,
+        .column = l.start - l.line_start + 1,
+    });
+}
+
 static Token new_token(TokenType type) {
     return ((Token) {
         .type = type,
         .start = l.start,
         .length = l.current - l.start,
-        .line = l.line,
+        .loc = get_loc(),
     });
 }
 
@@ -18,7 +25,7 @@ static Token error_token(const char *error_msg) {
         .type = TOKEN_ERROR,
         .start = error_msg,
         .length = strlen(error_msg),
-        .line = l.line,
+        .loc = get_loc(),
     });
 }
 
@@ -38,16 +45,19 @@ static bool match(char c) {
     return true;
 }
 
+static void next_line(void) {
+    advance();
+    l.line_start = l.current;
+    l.line++;
+}
+
 static void skip_whitespace(void) {
     for (;;) {
         switch (peek()) {
             case ' ':
             case '\r':
             case '\t': advance(); break;
-            case '\n':
-                advance();
-                l.line++;
-                break;
+            case '\n': next_line(); break;
             case '/':
                 if (peek_next() == '/') {
                     while (!is_done() && peek() != '\n') advance();
@@ -62,8 +72,11 @@ static void skip_whitespace(void) {
 
 static Token string(void) {
     while (!is_done() && peek() != '"') {
-        if (peek() == '\n') l.line++;
-        advance();
+        if (peek() == '\n') {
+            next_line();
+        } else {
+            advance();
+        }
     }
 
     if (match('"')) {
@@ -128,7 +141,7 @@ static Token identifier(void) {
 }
 
 void init_lexer(const char *source) {
-    l.current = l.start = source;
+    l.current = l.start = l.line_start = source;
     l.line = 1;
 }
 

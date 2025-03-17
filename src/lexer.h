@@ -1,6 +1,7 @@
 #ifndef CLOX_LEXER_H_
 #define CLOX_LEXER_H_
 
+#include "chunk.h"
 #include "common.h"
 
 typedef enum {
@@ -61,12 +62,13 @@ typedef struct {
     TokenType type;
     const char *start;
     uint32_t length;
-    uint32_t line;
+    Loc loc;
 } Token;
 
 typedef struct {
     const char *start;
     const char *current;
+    const char *line_start;
     uint32_t line;
 } Lexer;
 

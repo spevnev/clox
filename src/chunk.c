@@ -9,21 +9,21 @@ void free_chunk(Chunk *chunk) {
     chunk->constants.length = 0;
 
     chunk->code = ARRAY_FREE(chunk->code, chunk->capacity);
-    chunk->lines = ARRAY_FREE(chunk->lines, chunk->capacity);
+    chunk->locs = ARRAY_FREE(chunk->locs, chunk->capacity);
     chunk->capacity = 0;
     chunk->length = 0;
 }
 
-void push_byte(Chunk *chunk, uint8_t byte, uint32_t line) {
+void push_byte(Chunk *chunk, uint8_t byte, Loc loc) {
     if (chunk->length >= chunk->capacity) {
         uint32_t old_capacity = chunk->capacity;
         chunk->capacity = VEC_GROW_CAPACITY(chunk->capacity);
         chunk->code = ARRAY_REALLOC(chunk->code, old_capacity, chunk->capacity);
-        chunk->lines = ARRAY_REALLOC(chunk->lines, old_capacity, chunk->capacity);
+        chunk->locs = ARRAY_REALLOC(chunk->locs, old_capacity, chunk->capacity);
     }
 
     chunk->code[chunk->length] = byte;
-    chunk->lines[chunk->length] = line;
+    chunk->locs[chunk->length] = loc;
     chunk->length++;
 }
 

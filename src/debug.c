@@ -32,8 +32,8 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         printf("' %u\n", arg_num);                      \
     } while (0)
 
-    uint32_t line = chunk->lines[offset];
-    if (offset > 0 && chunk->lines[offset - 1] == line) {
+    uint32_t line = chunk->locs[offset].line;
+    if (offset > 0 && chunk->locs[offset - 1].line == line) {
         printf("     | ");
     } else {
         printf("%4d | ", line);

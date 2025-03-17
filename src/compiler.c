@@ -90,18 +90,18 @@ static void statement(void);
 static void declaration(void);
 static void var_decl(void);
 
-static void error_at(uint32_t line, const char *fmt, ...) {
+static void error_at(Loc loc, const char *fmt, ...) {
     if (p.is_panicking) return;
     p.is_panicking = true;
     p.had_error = true;
 
     va_list args;
     va_start(args, fmt);
-    error_varg(line, fmt, args);
+    error_varg(loc, fmt, args);
     va_end(args);
 }
-#define error_prev(...) error_at(p.previous.line, __VA_ARGS__)
-#define error_current(...) error_at(p.current.line, __VA_ARGS__)
+#define error_prev(...) error_at(p.previous.loc, __VA_ARGS__)
+#define error_current(...) error_at(p.current.loc, __VA_ARGS__)
 
 static bool is_next(TokenType type) { return p.current.type == type; }
 
@@ -147,7 +147,7 @@ static uint8_t identifier_constant(Token token) {
     return add_constant(VALUE_OBJECT(copy_string(token.start, token.length)));
 }
 
-static void emit_byte(uint8_t byte) { push_byte(current_chunk(), byte, p.previous.line); }
+static void emit_byte(uint8_t byte) { push_byte(current_chunk(), byte, p.previous.loc); }
 static void emit_byte2(uint8_t byte1, uint8_t byte2) {
     emit_byte(byte1);
     emit_byte(byte2);
@@ -171,7 +171,7 @@ static uint32_t emit_jump(uint8_t jump_op) {
 static void patch_jump(uint32_t offset) {
     // -2 adjusts for the 16-bit jump operand that is already skipped.
     uint32_t jump = current_chunk()->length - offset - 2;
-    if (jump > UINT16_MAX) error_at(current_chunk()->lines[offset], "Jump target is too far");
+    if (jump > UINT16_MAX) error_at(current_chunk()->locs[offset], "Jump target is too far");
     memcpy(current_chunk()->code + offset, &jump, sizeof(uint16_t));
 }
 
@@ -180,7 +180,7 @@ static void emit_loop(uint32_t loop_start) {
     emit_byte(OP_LOOP);
     // 2 adjusts for the loop instruction and its operand.
     uint32_t offset = current_chunk()->length + 2 - loop_start;
-    if (offset > UINT16_MAX) error_at(current_chunk()->lines[loop_start], "Loop body is too big");
+    if (offset > UINT16_MAX) error_at(current_chunk()->locs[loop_start], "Loop body is too big");
     emit_byte2(offset & 0xFF, (offset >> 8) & 0xFF);
 }
 

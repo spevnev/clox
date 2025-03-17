@@ -26,8 +26,8 @@ static void print_stacktrace(void) {
     fprintf(stderr, "Stacktrace:\n");
     for (CallFrame* frame = vm.frame; frame >= vm.frames; frame--) {
         ObjFunction* function = frame->closure->function;
-        uint32_t line = function->chunk.lines[frame->ip - function->chunk.code - 1];
-        fprintf(stderr, "    '%s' at line %u\n", function->name->cstr, line);
+        Loc loc = function->chunk.locs[frame->ip - function->chunk.code - 1];
+        fprintf(stderr, "    '%s' at %u:%u\n", function->name->cstr, loc.line, loc.column);
     }
 }
 
@@ -35,7 +35,7 @@ void runtime_error(const char* fmt, ...) {
     Chunk* chunk = &vm.frame->closure->function->chunk;
     va_list args;
     va_start(args, fmt);
-    error_varg(chunk->lines[vm.frame->ip - chunk->code - 1], fmt, args);
+    error_varg(chunk->locs[vm.frame->ip - chunk->code - 1], fmt, args);
     va_end(args);
     print_stacktrace();
 }

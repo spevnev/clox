@@ -2,12 +2,13 @@
 #define CLOX_ERROR_H_
 
 #include <stdarg.h>
+#include "chunk.h"
 #include "common.h"
 
-static inline void error_varg(uint32_t line, const char *fmt, va_list args) {
+static inline void error_varg(Loc loc, const char *fmt, va_list args) {
     fprintf(stderr, "[ERROR] ");
     vfprintf(stderr, fmt, args);
-    fprintf(stderr, " at line %d.\n", line);
+    fprintf(stderr, " at %u:%u.\n", loc.line, loc.column);
 }
 
 #define PANIC(...)                    \
