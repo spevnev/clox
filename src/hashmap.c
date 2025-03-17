@@ -11,7 +11,7 @@
 
 static Entry *find_entry(Entry *entries, uint32_t capacity, const ObjString *key) {
     Entry *tombstone = NULL;
-    for (uint32_t index = key->hash % capacity;; index = (index + 1) % capacity) {
+    for (uint32_t index = key->hash & (capacity - 1);; index = (index + 1) & (capacity - 1)) {
         Entry *entry = &entries[index];
 
         if (entry->key == key) {
@@ -109,7 +109,7 @@ bool hashmap_delete(HashMap *map, const ObjString *key) {
 ObjString *hashmap_find_key(HashMap *map, const char *cstr, uint32_t length, uint32_t hash) {
     if (map->count == 0) return NULL;
 
-    for (uint32_t index = hash % map->capacity;; index = (index + 1) % map->capacity) {
+    for (uint32_t index = hash & (map->capacity - 1);; index = (index + 1) & (map->capacity - 1)) {
         ObjString *key = map->entries[index].key;
 
         if (key == NULL) {
