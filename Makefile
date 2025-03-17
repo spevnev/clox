@@ -7,6 +7,10 @@ ifeq ($(DEBUG), 1)
 	CFLAGS += -g3 -fsanitize=address,leak,undefined
 endif
 
+ifeq ($(TEST), 1)
+	CFLAGS += -fsanitize=address,leak,undefined -D HIDE_STACKTRACE -D DEBUG_STRESS_GC
+endif
+
 SRC_DIR := src
 OUT_DIR := build
 OBJ_DIR := $(OUT_DIR)/$(SRC_DIR)

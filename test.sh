@@ -7,7 +7,9 @@ RED="\e[1;31m"
 GREEN="\e[1;32m"
 BLUE="\e[1;34m"
 
-make
+make TEST=1 -B
+ret=$?
+if [ $ret -ne 0 ]; then exit $ret; fi
 echo ""
 
 passed=0

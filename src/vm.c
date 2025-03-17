@@ -22,7 +22,7 @@ __attribute__((unused)) static void print_stack(void) {
     printf("\n");
 }
 
-static void print_stacktrace(void) {
+__attribute__((unused)) static void print_stacktrace(void) {
     fprintf(stderr, "Stacktrace:\n");
     for (CallFrame* frame = vm.frame; frame >= vm.frames; frame--) {
         ObjFunction* function = frame->closure->function;
@@ -37,7 +37,9 @@ void runtime_error(const char* fmt, ...) {
     va_start(args, fmt);
     error_varg(chunk->locs[vm.frame->ip - chunk->code - 1], fmt, args);
     va_end(args);
+#ifndef HIDE_STACKTRACE
     print_stacktrace();
+#endif
 }
 
 void stack_push(Value value) {
