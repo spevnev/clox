@@ -20,12 +20,12 @@ static Token new_token(TokenType type) {
     });
 }
 
-static Token error_token(const char *error_msg) {
+static Token error_token(Loc loc, const char *error_msg) {
     return ((Token) {
         .type = TOKEN_ERROR,
         .start = error_msg,
         .length = strlen(error_msg),
-        .loc = get_loc(),
+        .loc = loc,
     });
 }
 
@@ -71,6 +71,8 @@ static void skip_whitespace(void) {
 }
 
 static Token string(void) {
+    Loc loc = get_loc();
+
     while (!is_done() && peek() != '"') {
         if (peek() == '\n') {
             next_line();
@@ -82,7 +84,7 @@ static Token string(void) {
     if (match('"')) {
         return new_token(TOKEN_STRING);
     } else {
-        return error_token("Unterminated string");
+        return error_token(loc, "Unterminated string");
     }
 }
 
@@ -177,5 +179,5 @@ Token next_token(void) {
             break;
     }
 
-    return error_token("Unexpected character");
+    return error_token(get_loc(), "Unexpected character");
 }

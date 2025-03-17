@@ -5,6 +5,18 @@
 #include "memory.h"
 #include "object.h"
 
+const char *value_to_temp_cstr(Value value) {
+    static char CSTR[1024];
+
+    switch (value.type) {
+        case VAL_NIL:    return "nil";
+        case VAL_BOOL:   return value.as.boolean ? "true" : "false";
+        case VAL_NUMBER: snprintf(CSTR, sizeof(CSTR), "%g", value.as.number); return CSTR;
+        case VAL_OBJECT: return object_to_temp_cstr(value.as.object);
+        default:         UNREACHABLE();
+    }
+}
+
 void values_push(ValueVec *vec, Value value) {
     if (vec->length >= vec->capacity) {
         uint32_t old_capacity = vec->capacity;
@@ -13,16 +25,6 @@ void values_push(ValueVec *vec, Value value) {
     }
 
     vec->values[vec->length++] = value;
-}
-
-void print_value(Value value) {
-    switch (value.type) {
-        case VAL_NIL:    printf("nil"); break;
-        case VAL_BOOL:   printf("%s", value.as.boolean ? "true" : "false"); break;
-        case VAL_NUMBER: printf("%g", value.as.number); break;
-        case VAL_OBJECT: print_object(value.as.object); break;
-        default:         UNREACHABLE();
-    }
 }
 
 bool value_is_truthy(Value value) {

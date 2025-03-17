@@ -28,9 +28,7 @@ void mark_object(Object *object) {
     object->is_marked = true;
 
 #ifdef DEBUG_LOG_GC
-    printf("%p mark ", (void *) object);
-    print_object(object);
-    printf("\n");
+    printf("%p mark %s\n", (void *) object, object_to_temp_cstr(object));
 #endif
 
     switch (object->type) {
@@ -70,9 +68,7 @@ static void mark_roots(void) {
 
 static void trace_object(Object *object) {
 #ifdef DEBUG_LOG_GC
-    printf("%p trace ", (void *) object);
-    print_object(object);
-    printf("\n");
+    printf("%p trace %s\n", (void *) object, object_to_temp_cstr(object));
 #endif
 
     switch (object->type) {
@@ -131,9 +127,7 @@ static void sweep(void) {
 
         Object *unreachable = current;
 #ifdef DEBUG_LOG_GC
-        printf("%p free ", (void *) unreachable);
-        print_object(unreachable);
-        printf("\n");
+        printf("%p free %s\n", (void *) unreachable, object_to_temp_cstr(unreachable));
 #endif
         current = current->next;
 

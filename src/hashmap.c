@@ -27,11 +27,11 @@ static Entry *find_entry(Entry *entries, uint32_t capacity, const ObjString *key
 }
 
 static void grow_map(HashMap *map) {
+    uint32_t new_capacity = MAP_GROW_CAPACITY(map->capacity);
+    Entry *new_entries = reallocate(NULL, 0, sizeof(*new_entries) * new_capacity);
+
     // Entries are initialized with zeroes, so value type of empty entry must be zero.
     static_assert(VAL_NIL == 0);
-
-    uint32_t new_capacity = MAP_GROW_CAPACITY(map->capacity);
-    Entry *new_entries = ARRAY_REALLOC(map->entries, 0, new_capacity);
     memset(new_entries, 0, sizeof(*map->entries) * new_capacity);
 
     // Recount to exclude tombstones.
@@ -76,6 +76,9 @@ bool hashmap_get(HashMap *map, const ObjString *key, Value *value) {
 }
 
 bool hashmap_set(HashMap *map, ObjString *key, Value value) {
+#ifdef DEBUG_STRESS_GC
+    collect_garbage();
+#endif
     if (map->count >= map->capacity * MAX_LOAD) grow_map(map);
 
     Entry *entry = find_entry(map->entries, map->capacity, key);

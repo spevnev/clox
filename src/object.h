@@ -83,7 +83,7 @@ static inline bool is_object_type(Value value, ObjectType type) {
     return value.type == VAL_OBJECT && value.as.object->type == type;
 }
 
-void print_object(const Object *object);
+const char *object_to_temp_cstr(const Object *object);
 void free_object(Object *object);
 ObjFunction *new_function(ObjString *name);
 ObjUpvalue *new_upvalue(Value *value);

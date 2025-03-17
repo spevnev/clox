@@ -17,7 +17,7 @@ __attribute__((unused)) static void print_stack(void) {
     printf("Stack: ");
     for (const Value* value = vm.stack; value < vm.stack_top; value++) {
         if (value != vm.stack) printf(", ");
-        print_value(*value);
+        printf("%s", value_to_temp_cstr(*value));
     }
     printf("\n");
 }
@@ -121,7 +121,7 @@ static bool call_value(Value value, uint8_t arg_num) {
         }
     }
 
-    runtime_error("Called value must be functions or classes");
+    runtime_error("Only functions and classes can be called but found '%s'", value_to_temp_cstr(value));
     return false;
 }
 
@@ -161,15 +161,19 @@ static InterpretResult run(void) {
 #define READ_CONST() (vm.frame->closure->function->chunk.constants.values[READ_U8()])
 #define READ_STRING() ((ObjString*) READ_CONST().as.object)
 
-#define BINARY_OP(value_type, op)                                                   \
-    do {                                                                            \
-        if (stack_peek(0).type != VAL_NUMBER || stack_peek(1).type != VAL_NUMBER) { \
-            runtime_error("Operands must be numbers");                              \
-            return RESULT_RUNTIME_ERROR;                                            \
-        }                                                                           \
-        double b = stack_pop().as.number;                                           \
-        double a = stack_pop().as.number;                                           \
-        stack_push(value_type(a op b));                                             \
+#define BINARY_OP(value_type, op)                                                                        \
+    do {                                                                                                 \
+        if (stack_peek(0).type != VAL_NUMBER) {                                                          \
+            runtime_error("Operands must be numbers but found '%s'", value_to_temp_cstr(stack_peek(0))); \
+            return RESULT_RUNTIME_ERROR;                                                                 \
+        }                                                                                                \
+        if (stack_peek(1).type != VAL_NUMBER) {                                                          \
+            runtime_error("Operands must be numbers but found '%s'", value_to_temp_cstr(stack_peek(1))); \
+            return RESULT_RUNTIME_ERROR;                                                                 \
+        }                                                                                                \
+        double b = stack_pop().as.number;                                                                \
+        double a = stack_pop().as.number;                                                                \
+        stack_push(value_type(a op b));                                                                  \
     } while (0)
 
     for (;;) {
@@ -196,7 +200,10 @@ static InterpretResult run(void) {
                 } else if (stack_peek(0).type == VAL_NUMBER && stack_peek(1).type == VAL_NUMBER) {
                     stack_push(VALUE_NUMBER(stack_pop().as.number + stack_pop().as.number));
                 } else {
-                    runtime_error("Operands must both be numbers or strings");
+                    Value value = (is_object_type(stack_peek(0), OBJ_STRING) || stack_peek(0).type == VAL_NUMBER)
+                                      ? stack_peek(1)
+                                      : stack_peek(0);
+                    runtime_error("Operands must both be numbers or strings but found '%s'", value_to_temp_cstr(value));
                     return RESULT_RUNTIME_ERROR;
                 }
                 break;
@@ -206,7 +213,7 @@ static InterpretResult run(void) {
             case OP_NOT:      stack_push(VALUE_BOOL(!value_is_truthy(stack_pop()))); break;
             case OP_NEGATE:
                 if (stack_peek(0).type != VAL_NUMBER) {
-                    runtime_error("Operand must be a number");
+                    runtime_error("Operand must be a number but found '%s'", value_to_temp_cstr(stack_peek(0)));
                     return RESULT_RUNTIME_ERROR;
                 }
                 (vm.stack_top - 1)->as.number *= -1;
@@ -238,11 +245,8 @@ static InterpretResult run(void) {
             case OP_SET_LOCAL:   vm.frame->slots[READ_U8()] = stack_peek(0); break;
             case OP_GET_UPVALUE: stack_push(*vm.frame->closure->upvalues[READ_U8()]->location); break;
             case OP_SET_UPVALUE: *vm.frame->closure->upvalues[READ_U8()]->location = stack_peek(0); break;
-            case OP_PRINT:
-                print_value(stack_pop());
-                printf("\n");
-                break;
-            case OP_JUMP: {
+            case OP_PRINT:       printf("%s\n", value_to_temp_cstr(stack_pop())); break;
+            case OP_JUMP:        {
                 uint16_t offset = READ_U16();
                 vm.frame->ip += offset;
             } break;
@@ -308,21 +312,23 @@ static InterpretResult run(void) {
                 stack_pop();
             } break;
             case OP_INHERIT: {
-                if (!is_object_type(stack_peek(1), OBJ_CLASS)) {
-                    runtime_error("Superclass must be a class");
+                Value superclass_value = stack_peek(1);
+                if (!is_object_type(superclass_value, OBJ_CLASS)) {
+                    runtime_error("Superclass must be a class but found '%s'", value_to_temp_cstr(superclass_value));
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjClass* superclass = (ObjClass*) stack_peek(1).as.object;
+                ObjClass* superclass = (ObjClass*) superclass_value.as.object;
                 ObjClass* subclass = (ObjClass*) stack_peek(0).as.object;
                 hashmap_set_all(&superclass->methods, &subclass->methods);
                 stack_pop();
             } break;
             case OP_GET_FIELD: {
-                if (!is_object_type(stack_peek(0), OBJ_INSTANCE)) {
-                    runtime_error("Only instances have fields");
+                Value instance_value = stack_peek(0);
+                if (!is_object_type(instance_value, OBJ_INSTANCE)) {
+                    runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*) stack_peek(0).as.object;
+                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
                 ObjString* field = READ_STRING();
 
                 Value value;
@@ -332,7 +338,7 @@ static InterpretResult run(void) {
                     break;
                 }
                 if (hashmap_get(&instance->class->methods, field, &value)) {
-                    ObjBoundMethod* bound_method = new_bound_method(stack_peek(0), (ObjClosure*) value.as.object);
+                    ObjBoundMethod* bound_method = new_bound_method(instance_value, (ObjClosure*) value.as.object);
                     stack_pop();
                     stack_push(VALUE_OBJECT(bound_method));
                     break;
@@ -342,26 +348,29 @@ static InterpretResult run(void) {
                 return RESULT_RUNTIME_ERROR;
             } break;
             case OP_SET_FIELD: {
-                if (!is_object_type(stack_peek(1), OBJ_INSTANCE)) {
-                    runtime_error("Only instances have fields");
+                Value instance_value = stack_peek(1);
+                if (!is_object_type(instance_value, OBJ_INSTANCE)) {
+                    runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
                     return RESULT_RUNTIME_ERROR;
                 }
 
-                Value value = stack_pop();
-                ObjInstance* instance = (ObjInstance*) stack_pop().as.object;
-                stack_push(value);
-
+                Value value = stack_peek(0);
+                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
                 hashmap_set(&instance->fields, READ_STRING(), value);
+                stack_pop();
+                stack_pop();
+                stack_push(value);
             } break;
             case OP_INVOKE: {
                 ObjString* name = READ_STRING();
                 uint8_t arg_num = READ_U8();
 
-                if (!is_object_type(stack_peek(arg_num), OBJ_INSTANCE)) {
-                    runtime_error("Only instances have fields");
+                Value instance_value = stack_peek(arg_num);
+                if (!is_object_type(instance_value, OBJ_INSTANCE)) {
+                    runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*) stack_peek(arg_num).as.object;
+                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
 
                 Value value;
                 if (hashmap_get(&instance->fields, name, &value)) {

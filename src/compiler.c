@@ -90,9 +90,9 @@ static void statement(void);
 static void declaration(void);
 static void var_decl(void);
 
+// Most errors do not require synchronization, so `is_panicking` should be set by the caller.
 static void error_at(Loc loc, const char *fmt, ...) {
     if (p.is_panicking) return;
-    p.is_panicking = true;
     p.had_error = true;
 
     va_list args;
@@ -111,6 +111,7 @@ static void advance(void) {
         p.current = next_token();
         if (p.current.type != TOKEN_ERROR) break;
         error_current(p.current.start);
+        p.is_panicking = true;
     }
 }
 
@@ -119,6 +120,7 @@ static void expect(TokenType type, const char *error_message) {
         advance();
     } else {
         error_current(error_message);
+        p.is_panicking = true;
     }
 }
 
@@ -199,10 +201,12 @@ static void parse_precedence(Precedence precedence) {
 
     ParseFn prefix_rule = get_rule(p.previous.type)->prefix;
     if (prefix_rule == NULL) {
-        error_prev("Expected expression");
+        error_prev("Expected an expression but found '%.*s'", p.previous.length, p.previous.start);
+        p.is_panicking = true;
         return;
     }
 
+    Loc loc = p.previous.loc;
     bool can_assign = precedence <= PREC_ASSIGNMENT;
     prefix_rule(can_assign);
 
@@ -212,7 +216,10 @@ static void parse_precedence(Precedence precedence) {
         infix_rule(can_assign);
     }
 
-    if (can_assign && match(TOKEN_EQUAL)) error_current("Invalid assignment target");
+    if (can_assign && match(TOKEN_EQUAL)) {
+        error_at(loc, "Invalid assignment target");
+        p.is_panicking = true;
+    }
 }
 
 static void expression(void) { parse_precedence(PREC_ASSIGNMENT); }
@@ -290,7 +297,10 @@ static uint8_t args(void) {
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
             expression();
-            if (arg_num == MAX_ARITY) error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
+            if (arg_num == MAX_ARITY) {
+                error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
+                p.is_panicking = true;
+            }
             arg_num++;
         } while (match(TOKEN_COMMA));
     }
@@ -309,7 +319,7 @@ static void string(UNUSED(bool can_assign)) {
 static void variable(bool can_assign) { named_var(p.previous, can_assign); }
 
 static void this(UNUSED(bool can_assign)) {
-    if (cc == NULL) error_prev("Cannot use 'this' outside of a method");
+    if (cc == NULL) error_prev("Cannot use 'this' outside of class");
 
     // Treat `this` as a local variable.
     variable(false);
@@ -317,7 +327,7 @@ static void this(UNUSED(bool can_assign)) {
 
 static void super(UNUSED(bool can_assign)) {
     if (cc == NULL) {
-        error_prev("Cannot use 'super' outside of a method");
+        error_prev("Cannot use 'super' outside of class");
     } else if (!cc->has_superclass) {
         error_prev("Cannot use 'super' in a class without superclass");
     }
@@ -505,7 +515,7 @@ static void end_scope(void) {
 
 static void add_local(Token name) {
     if (c->locals_count >= LOCALS_SIZE) {
-        error_prev("Too many local variables in one scope.");
+        error_prev("Too many local variables in one scope");
         return;
     }
 
@@ -520,7 +530,10 @@ static void declare_local(void) {
     for (int i = c->locals_count - 1; i >= 0; i--) {
         Local *local = &c->locals[i];
         if (local->depth < c->scope_depth) break;
-        if (token_equals(local->name, name)) error_prev("Redefinition of '%.*s'", name.length, name.start);
+
+        if (token_equals(local->name, name)) {
+            error_prev("Redeclaration of local variable '%.*s'", name.length, name.start);
+        }
     }
 
     add_local(name);
@@ -566,8 +579,9 @@ static void synchronize(void) {
             case TOKEN_IF:
             case TOKEN_WHILE:
             case TOKEN_PRINT:
-            case TOKEN_RETURN: return;
-            default:           advance(); break;
+            case TOKEN_RETURN:
+            case TOKEN_LEFT_BRACE: return;
+            default:               advance(); break;
         }
     }
 }
@@ -580,7 +594,7 @@ static void block(void) {
 
 static void expression_stmt(void) {
     expression();
-    expect(TOKEN_SEMICOLON, "Expected ';' after expression statement");
+    expect(TOKEN_SEMICOLON, "Expected ';' after expression");
     emit_byte(OP_POP);
 }
 
@@ -681,12 +695,12 @@ static void for_stmt(void) {
 
 static void return_stmt(void) {
     advance();
-    if (c->function_type == FUN_SCRIPT) error_prev("Return outside of function");
+    if (c->function_type == FUN_SCRIPT) error_prev("Cannot return outside of function");
 
     if (match(TOKEN_SEMICOLON)) {
         emit_return();
     } else {
-        if (c->function_type == FUN_INITIALIZER) error_current("Cannot return a value from initializer");
+        if (c->function_type == FUN_INITIALIZER) error_current("Cannot return value from initializer");
 
         expression();
         expect(TOKEN_SEMICOLON, "Expected ';' after return");
@@ -712,7 +726,7 @@ static void statement(void) {
 
 static void var_decl(void) {
     advance();
-    expect(TOKEN_IDENTIFIER, "Expected variable name after 'var'");
+    expect(TOKEN_IDENTIFIER, "Expected a variable name after 'var'");
 
     uint8_t global = declare_var();
 
@@ -735,15 +749,23 @@ static void function(FunctionType type) {
     expect(TOKEN_LEFT_PAREN, "Expected '(' after function name");
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
-            if (c->function->arity == MAX_ARITY) error_prev("Function has too many parameters (max is %d)", MAX_ARITY);
+            if (c->function->arity == MAX_ARITY) {
+                error_prev("Function has too many parameters (max is %d)", MAX_ARITY);
+                p.is_panicking = true;
+            }
             c->function->arity++;
             expect(TOKEN_IDENTIFIER, "Expected parameter name");
             define_var(declare_var());
         } while (match(TOKEN_COMMA));
     }
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after parameters");
-    if (!is_next(TOKEN_LEFT_BRACE)) error_prev("Expected '{' before function body");
-    block();
+
+    if (is_next(TOKEN_LEFT_BRACE)) {
+        block();
+    } else {
+        error_prev("Expected '{' before function body");
+        p.is_panicking = true;
+    }
 
     end_scope();
     ObjFunction *function = end_compiler();
@@ -778,7 +800,7 @@ static void class_decl(void) {
     define_var(declare_var());
 
     if (match(TOKEN_LESS)) {
-        expect(TOKEN_IDENTIFIER, "Expected superclass name after '<'");
+        expect(TOKEN_IDENTIFIER, "Expected a superclass name after '<'");
         if (token_equals(p.previous, class_name)) error_prev("Class cannot inherit from itself");
 
         begin_scope();

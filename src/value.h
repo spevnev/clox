@@ -32,8 +32,8 @@ typedef struct {
 #define VALUE_NUMBER(value) ((Value) {.type = VAL_NUMBER, .as.number = (value)})
 #define VALUE_OBJECT(value) ((Value) {.type = VAL_OBJECT, .as.object = (Object *) (value)})
 
+const char *value_to_temp_cstr(Value value);
 void values_push(ValueVec *vec, Value value);
-void print_value(Value value);
 bool value_is_truthy(Value value);
 bool value_equals(Value a, Value b);
 

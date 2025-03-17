@@ -6,6 +6,30 @@
 #include "memory.h"
 #include "vm.h"
 
+const char *object_to_temp_cstr(const Object *object) {
+    static char CSTR[1024];
+
+    switch (object->type) {
+        case OBJ_UPVALUE: return "upvalue";
+        case OBJ_STRING:  return ((const ObjString *) object)->cstr;
+        case OBJ_CLASS:   return ((const ObjClass *) object)->name->cstr;
+        case OBJ_FUNCTION:
+            snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjFunction *) object)->name->cstr);
+            return CSTR;
+        case OBJ_CLOSURE:
+            snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjClosure *) object)->function->name->cstr);
+            return CSTR;
+        case OBJ_NATIVE: snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjNative *) object)->name); return CSTR;
+        case OBJ_INSTANCE:
+            snprintf(CSTR, sizeof(CSTR), "%s instance", ((const ObjInstance *) object)->class->name->cstr);
+            return CSTR;
+        case OBJ_BOUND_METHOD:
+            snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjBoundMethod *) object)->method->function->name->cstr);
+            return CSTR;
+        default: UNREACHABLE();
+    }
+}
+
 static Object *new_object(ObjectType type, uint32_t size) {
     Object *object = reallocate(NULL, 0, size);
     object->is_marked = false;
@@ -108,22 +132,6 @@ void free_object(Object *object) {
         } break;
         case OBJ_BOUND_METHOD: reallocate(object, sizeof(ObjBoundMethod), 0); break;
         default:               UNREACHABLE();
-    }
-}
-
-void print_object(const Object *object) {
-    switch (object->type) {
-        case OBJ_STRING:   printf("%s", ((const ObjString *) object)->cstr); break;
-        case OBJ_FUNCTION: printf("<fn %s>", ((const ObjFunction *) object)->name->cstr); break;
-        case OBJ_UPVALUE:  printf("upvalue"); break;
-        case OBJ_CLOSURE:  printf("<fn %s>", ((const ObjClosure *) object)->function->name->cstr); break;
-        case OBJ_NATIVE:   printf("<native fn %s>", ((const ObjNative *) object)->name); break;
-        case OBJ_CLASS:    printf("%s", ((const ObjClass *) object)->name->cstr); break;
-        case OBJ_INSTANCE: printf("%s instance", ((const ObjInstance *) object)->class->name->cstr); break;
-        case OBJ_BOUND_METHOD:
-            printf("<fn %s>", ((const ObjBoundMethod *) object)->method->function->name->cstr);
-            break;
-        default: UNREACHABLE();
     }
 }
 

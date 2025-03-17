@@ -16,20 +16,16 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         uint16_t jump_offset = READ_U16();                                \
         printf(instr " %u -> %04u\n", jump_offset, offset + jump_offset); \
     } while (0)
-#define CONST_INSTR(instr)                              \
-    do {                                                \
-        uint8_t constant = READ_U8();                   \
-        printf(instr " %u '", constant);                \
-        print_value(chunk->constants.values[constant]); \
-        printf("'\n");                                  \
+#define CONST_INSTR(instr)                                                                           \
+    do {                                                                                             \
+        uint8_t constant = READ_U8();                                                                \
+        printf(instr " %u '%s'\n", constant, value_to_temp_cstr(chunk->constants.values[constant])); \
     } while (0)
-#define INVOKE_INSTR(instr)                             \
-    do {                                                \
-        uint8_t constant = READ_U8();                   \
-        uint8_t arg_num = READ_U8();                    \
-        printf(instr " %u '", constant);                \
-        print_value(chunk->constants.values[constant]); \
-        printf("' %u\n", arg_num);                      \
+#define INVOKE_INSTR(instr)                                                                                      \
+    do {                                                                                                         \
+        uint8_t constant = READ_U8();                                                                            \
+        uint8_t arg_num = READ_U8();                                                                             \
+        printf(instr " %u '%s' %u\n", constant, value_to_temp_cstr(chunk->constants.values[constant]), arg_num); \
     } while (0)
 
     uint32_t line = chunk->locs[offset].line;
