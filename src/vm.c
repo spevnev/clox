@@ -52,6 +52,11 @@ Value stack_pop(void) {
     return *(--vm.stack_top);
 }
 
+void stack_popn(uint8_t n) {
+    vm.stack_top -= n;
+    assert(vm.stack_top >= vm.stack && "Stack underflow");
+}
+
 Value stack_peek(uint32_t distance) {
     assert(distance < vm.stack_top - vm.stack && "Peek distance points outside of stack");
     return *(vm.stack_top - distance - 1);
@@ -189,6 +194,7 @@ static InterpretResult run(void) {
             case OP_FALSE:    stack_push(VALUE_BOOL(false)); break;
             case OP_CONSTANT: stack_push(READ_CONST()); break;
             case OP_POP:      stack_pop(); break;
+            case OP_POPN:     stack_popn(READ_U8()); break;
             case OP_EQUAL:    stack_push(VALUE_BOOL(value_equals(stack_pop(), stack_pop()))); break;
             case OP_GREATER:  BINARY_OP(VALUE_BOOL, >); break;
             case OP_LESS:     BINARY_OP(VALUE_BOOL, <); break;
@@ -357,8 +363,7 @@ static InterpretResult run(void) {
                 Value value = stack_peek(0);
                 ObjInstance* instance = (ObjInstance*) instance_value.as.object;
                 hashmap_set(&instance->fields, READ_STRING(), value);
-                stack_pop();
-                stack_pop();
+                stack_popn(2);
                 stack_push(value);
             } break;
             case OP_INVOKE: {
@@ -434,8 +439,7 @@ void init_vm(void) {
         Value native = VALUE_OBJECT(new_native(native_defs[i]));
         stack_push(native);
         hashmap_set(&vm.globals, name, native);
-        stack_pop();
-        stack_pop();
+        stack_popn(2);
     }
 }
 

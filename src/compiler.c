@@ -162,6 +162,14 @@ static void emit_byte3(uint8_t byte1, uint8_t byte2, uint8_t byte3) {
 
 static void emit_constant(Value constant) { emit_byte2(OP_CONSTANT, add_constant(constant)); }
 
+static void emit_pop(uint8_t n) {
+    if (n == 1) {
+        emit_byte(OP_POP);
+    } else {
+        emit_byte2(OP_POPN, n);
+    }
+}
+
 // Emits a jump instruction with placeholder operand and returns the offset to backpatch it later.
 static uint32_t emit_jump(uint8_t jump_op) {
     emit_byte(jump_op);
@@ -502,15 +510,23 @@ static ObjFunction *end_compiler(void) {
 static void begin_scope(void) { c->scope_depth++; }
 
 static void end_scope(void) {
+    uint8_t pop_count = 0;
+
     c->scope_depth--;
-    while (c->locals_count > 0 && c->locals[c->locals_count - 1].depth > c->scope_depth) {
-        if (c->locals[c->locals_count - 1].is_captured) {
-            emit_byte(OP_CLOSE_UPVALUE);
-        } else {
-            emit_byte(OP_POP);
+    for (; c->locals_count > 0 && c->locals[c->locals_count - 1].depth > c->scope_depth; c->locals_count--) {
+        if (!c->locals[c->locals_count - 1].is_captured) {
+            pop_count++;
+            continue;
         }
-        c->locals_count--;
+
+        if (pop_count > 0) {
+            emit_pop(pop_count);
+            pop_count = 0;
+        }
+
+        emit_byte(OP_CLOSE_UPVALUE);
     }
+    if (pop_count > 0) emit_pop(pop_count);
 }
 
 static void add_local(Token name) {

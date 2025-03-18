@@ -10,6 +10,7 @@ typedef enum {
     OP_FALSE,
     OP_CONSTANT,
     OP_POP,
+    OP_POPN,
     OP_EQUAL,
     OP_GREATER,
     OP_LESS,

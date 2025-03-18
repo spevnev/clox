@@ -44,6 +44,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_FALSE:         INSTR("false"); break;
         case OP_CONSTANT:      CONST_INSTR("const"); break;
         case OP_POP:           INSTR("pop"); break;
+        case OP_POPN:          U8_INSTR("popn"); break;
         case OP_EQUAL:         INSTR("equal"); break;
         case OP_GREATER:       INSTR("greater"); break;
         case OP_LESS:          INSTR("less"); break;
