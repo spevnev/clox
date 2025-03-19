@@ -1,0 +1,10 @@
+var a = 1;
+var b = 2;
+print a+++b; // 3
+print a; // 2
+print a---b; // 0
+print a; // 1
+
+var c = 0;
+print c++ + c++ + c++ + c; // 6
+print c-- + c-- + c-- + c; // 6

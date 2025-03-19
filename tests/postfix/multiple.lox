@@ -1,0 +1,5 @@
+var a = 0;
+print (a++)++; // [ERROR] Invalid post increment target at 2:12.
+print a++++; // [ERROR] Invalid post increment target at 3:10.
+print (a--)--; // [ERROR] Invalid post decrement target at 4:12.
+print a----; // [ERROR] Invalid post decrement target at 5:10.

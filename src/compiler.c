@@ -228,6 +228,8 @@ static void parse_precedence(Precedence precedence) {
         error_at(loc, "Invalid assignment target");
         p.is_panicking = true;
     }
+    if (match(TOKEN_PLUS_PLUS)) error_prev("Invalid post increment target");
+    if (match(TOKEN_MINUS_MINUS)) error_prev("Invalid post decrement target");
 }
 
 static void expression(void) { parse_precedence(PREC_ASSIGNMENT); }
@@ -295,6 +297,16 @@ static void named_var(Token token, bool can_assign) {
     if (can_assign && match(TOKEN_EQUAL)) {
         expression();
         emit_byte2(set_op, operand);
+    } else if (match(TOKEN_PLUS_PLUS)) {
+        emit_byte2(get_op, operand);
+        emit_byte(OP_INCR);
+        emit_byte2(set_op, operand);
+        emit_byte(OP_DECR);
+    } else if (match(TOKEN_MINUS_MINUS)) {
+        emit_byte2(get_op, operand);
+        emit_byte(OP_DECR);
+        emit_byte2(set_op, operand);
+        emit_byte(OP_INCR);
     } else {
         emit_byte2(get_op, operand);
     }
@@ -366,9 +378,10 @@ static void unary(UNUSED(bool can_assign)) {
     parse_precedence(PREC_UNARY);
 
     switch (op) {
-        case TOKEN_BANG:  emit_byte(OP_NOT); break;
-        case TOKEN_MINUS: emit_byte(OP_NEGATE); break;
-        default:          UNREACHABLE();
+        case TOKEN_BANG:        emit_byte(OP_NOT); break;
+        case TOKEN_MINUS:       emit_byte(OP_NEGATE); break;
+        case TOKEN_MINUS_MINUS: emit_byte2(OP_NEGATE, OP_NEGATE); break;
+        default:                UNREACHABLE();
     }
 }
 
@@ -437,6 +450,19 @@ static void dot(bool can_assign) {
     } else if (match(TOKEN_LEFT_PAREN)) {
         uint8_t arg_num = args();
         emit_byte3(OP_INVOKE, name, arg_num);
+    } else if (match(TOKEN_PLUS_PLUS)) {
+        // Get/set field consumes an instance from the stack, so we have to duplicate it for the second call.
+        emit_byte(OP_DUP);
+        emit_byte2(OP_GET_FIELD, name);
+        emit_byte(OP_INCR);
+        emit_byte2(OP_SET_FIELD, name);
+        emit_byte(OP_DECR);
+    } else if (match(TOKEN_MINUS_MINUS)) {
+        emit_byte(OP_DUP);
+        emit_byte2(OP_GET_FIELD, name);
+        emit_byte(OP_DECR);
+        emit_byte2(OP_SET_FIELD, name);
+        emit_byte(OP_INCR);
     } else {
         emit_byte2(OP_GET_FIELD, name);
     }
@@ -454,6 +480,7 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_THIS]          = { this,     NULL,        PREC_NONE        },
     [TOKEN_SUPER]         = { super,    NULL,        PREC_NONE        },
     [TOKEN_BANG]          = { unary,    NULL,        PREC_NONE        },
+    [TOKEN_MINUS_MINUS]   = { unary,    NULL,        PREC_NONE        },
     [TOKEN_MINUS]         = { unary,    binary,      PREC_TERM        },
     [TOKEN_PLUS]          = { NULL,     binary,      PREC_TERM        },
     [TOKEN_SLASH]         = { NULL,     binary,      PREC_FACTOR      },

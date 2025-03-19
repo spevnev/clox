@@ -1,0 +1,8 @@
+class A {
+    init() {
+        this.str = "not a number";
+    }
+}
+
+var a = A();
+print a.str++; // [ERROR] Operand must be a number but found 'not a number' at 8:12.

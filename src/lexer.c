@@ -163,11 +163,11 @@ Token next_token(void) {
         case ':': return new_token(TOKEN_COLON);
         case ',': return new_token(TOKEN_COMMA);
         case '.': return new_token(TOKEN_DOT);
-        case '-': return new_token(TOKEN_MINUS);
-        case '+': return new_token(TOKEN_PLUS);
         case '/': return new_token(TOKEN_SLASH);
         case '*': return new_token(TOKEN_STAR);
         case '?': return new_token(TOKEN_QUESTION);
+        case '+': return new_token(match('+') ? TOKEN_PLUS_PLUS : TOKEN_PLUS);
+        case '-': return new_token(match('-') ? TOKEN_MINUS_MINUS : TOKEN_MINUS);
         case '!': return new_token(match('=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
         case '=': return new_token(match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
         case '<': return new_token(match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);

@@ -166,6 +166,15 @@ static InterpretResult run(void) {
 #define READ_CONST() (vm.frame->closure->function->chunk.constants.values[READ_U8()])
 #define READ_STRING() ((ObjString*) READ_CONST().as.object)
 
+#define UNARY_OP(op)                                                                                     \
+    do {                                                                                                 \
+        if (stack_peek(0).type != VAL_NUMBER) {                                                          \
+            runtime_error("Operand must be a number but found '%s'", value_to_temp_cstr(stack_peek(0))); \
+            return RESULT_RUNTIME_ERROR;                                                                 \
+        }                                                                                                \
+        (vm.stack_top - 1)->as.number op;                                                                \
+        break;                                                                                           \
+    } while (0)
 #define BINARY_OP(value_type, op)                                                                        \
     do {                                                                                                 \
         if (stack_peek(0).type != VAL_NUMBER) {                                                          \
@@ -193,6 +202,7 @@ static InterpretResult run(void) {
             case OP_TRUE:     stack_push(VALUE_BOOL(true)); break;
             case OP_FALSE:    stack_push(VALUE_BOOL(false)); break;
             case OP_CONSTANT: stack_push(READ_CONST()); break;
+            case OP_DUP:      stack_push(stack_peek(0)); break;
             case OP_POP:      stack_pop(); break;
             case OP_POPN:     stack_popn(READ_U8()); break;
             case OP_EQUAL:    stack_push(VALUE_BOOL(value_equals(stack_pop(), stack_pop()))); break;
@@ -213,17 +223,13 @@ static InterpretResult run(void) {
                     return RESULT_RUNTIME_ERROR;
                 }
                 break;
-            case OP_SUBTRACT: BINARY_OP(VALUE_NUMBER, -); break;
-            case OP_MULTIPLY: BINARY_OP(VALUE_NUMBER, *); break;
-            case OP_DIVIDE:   BINARY_OP(VALUE_NUMBER, /); break;
-            case OP_NOT:      stack_push(VALUE_BOOL(!value_is_truthy(stack_pop()))); break;
-            case OP_NEGATE:
-                if (stack_peek(0).type != VAL_NUMBER) {
-                    runtime_error("Operand must be a number but found '%s'", value_to_temp_cstr(stack_peek(0)));
-                    return RESULT_RUNTIME_ERROR;
-                }
-                (vm.stack_top - 1)->as.number *= -1;
-                break;
+            case OP_SUBTRACT:      BINARY_OP(VALUE_NUMBER, -); break;
+            case OP_MULTIPLY:      BINARY_OP(VALUE_NUMBER, *); break;
+            case OP_DIVIDE:        BINARY_OP(VALUE_NUMBER, /); break;
+            case OP_NOT:           stack_push(VALUE_BOOL(!value_is_truthy(stack_pop()))); break;
+            case OP_NEGATE:        UNARY_OP(*= -1); break;
+            case OP_INCR:          UNARY_OP(++); break;
+            case OP_DECR:          UNARY_OP(--); break;
             case OP_DEFINE_GLOBAL: {
                 ObjString* name = READ_STRING();
                 hashmap_set(&vm.globals, name, stack_peek(0));
@@ -424,6 +430,7 @@ static InterpretResult run(void) {
 #undef READ_U16
 #undef READ_CONST
 #undef READ_STRING
+#undef UNARY_OP
 #undef BINARY_OP
 }
 

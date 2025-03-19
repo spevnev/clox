@@ -1,0 +1,2 @@
+1++; // [ERROR] Invalid post increment target at 1:2.
+1--; // [ERROR] Invalid post decrement target at 2:2.

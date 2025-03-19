@@ -43,6 +43,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_TRUE:          INSTR("true"); break;
         case OP_FALSE:         INSTR("false"); break;
         case OP_CONSTANT:      CONST_INSTR("const"); break;
+        case OP_DUP:           INSTR("dup"); break;
         case OP_POP:           INSTR("pop"); break;
         case OP_POPN:          U8_INSTR("popn"); break;
         case OP_EQUAL:         INSTR("equal"); break;
@@ -54,6 +55,8 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_DIVIDE:        INSTR("divide"); break;
         case OP_NOT:           INSTR("not"); break;
         case OP_NEGATE:        INSTR("negate"); break;
+        case OP_INCR:          INSTR("incr"); break;
+        case OP_DECR:          INSTR("decr"); break;
         case OP_DEFINE_GLOBAL: CONST_INSTR("define global"); break;
         case OP_GET_GLOBAL:    CONST_INSTR("get global"); break;
         case OP_SET_GLOBAL:    CONST_INSTR("set global"); break;

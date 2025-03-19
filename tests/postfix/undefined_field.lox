@@ -1,0 +1,5 @@
+class A {
+}
+
+var a = A();
+print a.num++; // [ERROR] Undefined field 'num' at 5:12.
