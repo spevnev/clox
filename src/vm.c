@@ -13,7 +13,8 @@
 
 VM vm = {0};
 
-__attribute__((unused)) static void print_stack(void) {
+#ifdef DEBUG_TRACE_EXECUTION
+static void print_stack(void) {
     printf("Stack: ");
     for (const Value* value = vm.stack; value < vm.stack_top; value++) {
         if (value != vm.stack) printf(", ");
@@ -21,14 +22,17 @@ __attribute__((unused)) static void print_stack(void) {
     }
     printf("\n");
 }
+#endif
 
-__attribute__((unused)) static void print_stacktrace(void) {
+static void print_stacktrace(void) {
+#ifndef HIDE_STACKTRACE
     fprintf(stderr, "Stacktrace:\n");
     for (CallFrame* frame = vm.frame; frame >= vm.frames; frame--) {
         ObjFunction* function = frame->closure->function;
         Loc loc = function->chunk.locs[frame->ip - function->chunk.code - 1];
         fprintf(stderr, "    '%s' at %u:%u\n", function->name->cstr, loc.line, loc.column);
     }
+#endif
 }
 
 void runtime_error(const char* fmt, ...) {
@@ -37,9 +41,7 @@ void runtime_error(const char* fmt, ...) {
     va_start(args, fmt);
     error_varg(chunk->locs[vm.frame->ip - chunk->code - 1], fmt, args);
     va_end(args);
-#ifndef HIDE_STACKTRACE
     print_stacktrace();
-#endif
 }
 
 void stack_push(Value value) {
