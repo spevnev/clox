@@ -1,0 +1,13 @@
+class A {
+    method() { return 1; }
+}
+
+var a = A();
+
+var sum = 0;
+var start = clock();
+for (var i = 0;i < 50000000;i++) {
+    sum = sum + a.method();
+}
+print clock() - start;
+print sum;

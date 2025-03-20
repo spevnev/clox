@@ -1,0 +1,22 @@
+class A {
+    method() { return 1; }
+}
+
+class B {
+    method() { return -1; }
+}
+
+var a = A();
+var b = B();
+
+var sum = 0;
+var start = clock();
+for (var i = 0;i < 50000000;i++) {
+    sum = sum + a.method();
+
+    var c = a;
+    a = b;
+    b = c;
+}
+print clock() - start;
+print sum;

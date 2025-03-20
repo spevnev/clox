@@ -90,10 +90,20 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_INHERIT:       INSTR("inherit"); break;
         case OP_GET_FIELD:     CONST_INSTR("get field"); break;
         case OP_SET_FIELD:     CONST_INSTR("set field"); break;
-        case OP_INVOKE:        INVOKE_INSTR("invoke"); break;
-        case OP_GET_SUPER:     CONST_INSTR("get super"); break;
-        case OP_SUPER_INVOKE:  INVOKE_INSTR("super invoke"); break;
-        default:               printf("unknown opcode %d\n", opcode); break;
+        case OP_INVOKE:        {
+            INVOKE_INSTR("invoke");
+#ifdef INLINE_CACHING
+            offset += sizeof(cache_id_t) + sizeof(void*);
+#endif
+        } break;
+        case OP_GET_SUPER:    CONST_INSTR("get super"); break;
+        case OP_SUPER_INVOKE: {
+            INVOKE_INSTR("super invoke");
+#ifdef INLINE_CACHING
+            offset += sizeof(void*);
+#endif
+        } break;
+        default: printf("unknown opcode %d\n", opcode); break;
     }
     return offset;
 

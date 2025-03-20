@@ -1,10 +1,21 @@
 #include "object.h"
+#include <assert.h>
 #include <string.h>
 #include "common.h"
 #include "error.h"
 #include "hashmap.h"
 #include "memory.h"
 #include "vm.h"
+
+#ifdef INLINE_CACHING
+cache_id_t next_id(void) {
+    // Ids start at 1 to reserve 0 for uninitialized cached.
+    static cache_id_t id = 1;
+
+    assert(id != CACHE_ID_MAX);
+    return id++;
+}
+#endif
 
 const char *object_to_temp_cstr(const Object *object) {
     static char CSTR[1024];
@@ -85,6 +96,9 @@ ObjClass *new_class(ObjString *name) {
     ObjClass *class = (ObjClass *) new_object(OBJ_CLASS, sizeof(ObjClass));
     class->name = name;
     class->methods = (HashMap) {0};
+#ifdef INLINE_CACHING
+    class->id = next_id();
+#endif
     return class;
 }
 

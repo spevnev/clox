@@ -375,6 +375,10 @@ static InterpretResult run(void) {
             case OP_INVOKE: {
                 ObjString* name = READ_STRING();
                 uint8_t arg_num = READ_U8();
+#ifdef INLINE_CACHING
+                uint8_t* cache_ip = vm.frame->ip;
+                vm.frame->ip += sizeof(cache_id_t) + sizeof(void*);
+#endif
 
                 Value instance_value = stack_peek(arg_num);
                 if (!is_object_type(instance_value, OBJ_INSTANCE)) {
@@ -389,10 +393,27 @@ static InterpretResult run(void) {
                     if (!call_value(value, arg_num)) return RESULT_RUNTIME_ERROR;
                     break;
                 }
+
+#ifdef INLINE_CACHING
+                if (memcmp(cache_ip, &instance->class->id, sizeof(cache_id_t)) == 0) {
+                    ObjClosure* cached_method;
+                    memcpy(&cached_method, cache_ip + sizeof(cache_id_t), sizeof(cached_method));
+                    assert(cached_method != NULL);
+
+                    if (!call(cached_method, arg_num)) return RESULT_RUNTIME_ERROR;
+                    break;
+                }
+#endif
+
                 if (hashmap_get(&instance->class->methods, name, &value)) {
+#ifdef INLINE_CACHING
+                    memcpy(cache_ip, &instance->class->id, sizeof(cache_id_t));
+                    memcpy(cache_ip + sizeof(cache_id_t), &value.as.object, sizeof(void*));
+#endif
                     if (!call((ObjClosure*) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
                     break;
                 }
+
                 runtime_error("Undefined field '%s'", name->cstr);
                 return RESULT_RUNTIME_ERROR;
             } break;
@@ -415,12 +436,29 @@ static InterpretResult run(void) {
                 uint8_t arg_num = READ_U8();
                 ObjClass* superclass = (ObjClass*) stack_pop().as.object;
 
-                Value value;
-                if (!hashmap_get(&superclass->methods, name, &value)) {
-                    runtime_error("Undefined superclass method '%s'", name->cstr);
-                    return RESULT_RUNTIME_ERROR;
+#ifdef INLINE_CACHING
+                uint8_t* cache_ip = vm.frame->ip;
+                vm.frame->ip += sizeof(void*);
+
+                ObjClosure* cached_method;
+                memcpy(&cached_method, cache_ip, sizeof(cached_method));
+                if (cached_method != NULL) {
+                    if (!call(cached_method, arg_num)) return RESULT_RUNTIME_ERROR;
+                    break;
                 }
-                if (!call((ObjClosure*) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
+#endif
+
+                Value value;
+                if (hashmap_get(&superclass->methods, name, &value)) {
+#ifdef INLINE_CACHING
+                    memcpy(cache_ip, &value.as.object, sizeof(void*));
+#endif
+                    if (!call((ObjClosure*) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
+                    break;
+                }
+
+                runtime_error("Undefined superclass method '%s'", name->cstr);
+                return RESULT_RUNTIME_ERROR;
             } break;
             default: UNREACHABLE();
         }

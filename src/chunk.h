@@ -64,6 +64,7 @@ typedef struct {
 
 void free_chunk(Chunk *chunk);
 void push_byte(Chunk *chunk, uint8_t byte, Loc loc);
+void push_byte_n(Chunk *chunk, uint8_t byte, uint32_t count, Loc loc);
 uint32_t push_constant(Chunk *chunk, Value value);
 
 #endif  // CLOX_CHUNK_H_

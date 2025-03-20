@@ -1,0 +1,17 @@
+class A {
+    printNum(num) { print num; }
+}
+
+fun printNum(num) { print -num; }
+
+var a = A();
+for (var i = 0;i < 5;i = i + 1) {
+    /// Make sure that inline cache is checked after fields to correctly handle fields shadowing methods.
+    if (i == 3) a.printNum = printNum;
+    a.printNum(i);
+}
+// 0
+// 1
+// 2
+// -3
+// -4

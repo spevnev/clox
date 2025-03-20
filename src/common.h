@@ -14,4 +14,6 @@
 // #define DEBUG_STRESS_GC
 // #define DEBUG_LOG_GC
 
+#define INLINE_CACHING
+
 #endif  // CLOX_COMMON_H_

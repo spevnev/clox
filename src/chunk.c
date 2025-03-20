@@ -27,6 +27,22 @@ void push_byte(Chunk *chunk, uint8_t byte, Loc loc) {
     chunk->length++;
 }
 
+void push_byte_n(Chunk *chunk, uint8_t byte, uint32_t count, Loc loc) {
+    if (chunk->length + count >= chunk->capacity) {
+        uint32_t old_capacity = chunk->capacity;
+        chunk->capacity = VEC_GROW_CAPACITY(chunk->capacity);
+        if (chunk->capacity < chunk->length + count) chunk->capacity = chunk->length + count;
+        chunk->code = ARRAY_REALLOC(chunk->code, old_capacity, chunk->capacity);
+        chunk->locs = ARRAY_REALLOC(chunk->locs, old_capacity, chunk->capacity);
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        chunk->code[chunk->length] = byte;
+        chunk->locs[chunk->length] = loc;
+        chunk->length++;
+    }
+}
+
 uint32_t push_constant(Chunk *chunk, Value value) {
     values_push(&chunk->constants, value);
     return chunk->constants.length - 1;

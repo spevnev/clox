@@ -65,6 +65,9 @@ typedef struct {
     Object object;
     ObjString *name;
     HashMap methods;
+#ifdef INLINE_CACHING
+    uint16_t id;
+#endif
 } ObjClass;
 
 typedef struct {
@@ -79,9 +82,13 @@ typedef struct {
     ObjClosure *method;
 } ObjBoundMethod;
 
-static inline bool is_object_type(Value value, ObjectType type) {
-    return value.type == VAL_OBJECT && value.as.object->type == type;
-}
+#ifdef INLINE_CACHING
+typedef uint16_t cache_id_t;
+#define CACHE_ID_MAX UINT16_MAX
+
+// Id to compare classes in inline cache.
+cache_id_t next_id(void);
+#endif
 
 const char *object_to_temp_cstr(const Object *object);
 void free_object(Object *object);
@@ -94,5 +101,9 @@ ObjInstance *new_instance(ObjClass *class);
 ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method);
 ObjString *copy_string(const char *cstr, uint32_t length);
 ObjString *concat_strings(const ObjString *a, const ObjString *b);
+
+static inline bool is_object_type(Value value, ObjectType type) {
+    return value.type == VAL_OBJECT && value.as.object->type == type;
+}
 
 #endif  // CLOX_OBJECT_H_

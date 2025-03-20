@@ -159,6 +159,9 @@ static void emit_byte3(uint8_t byte1, uint8_t byte2, uint8_t byte3) {
     emit_byte(byte2);
     emit_byte(byte3);
 }
+#ifdef INLINE_CACHING
+static void emit_byte_n(uint8_t byte, uint32_t count) { push_byte_n(current_chunk(), byte, count, p.previous.loc); }
+#endif
 
 static void emit_constant(Value constant) { emit_byte2(OP_CONSTANT, add_constant(constant)); }
 
@@ -361,6 +364,10 @@ static void super(UNUSED(bool can_assign)) {
         uint8_t arg_num = args();
         named_var(super_token, false);
         emit_byte3(OP_SUPER_INVOKE, name, arg_num);
+#ifdef INLINE_CACHING
+        // Zero-initialize inline cache.
+        emit_byte_n(0, sizeof(void *));
+#endif
     } else {
         named_var(super_token, false);
         emit_byte2(OP_GET_SUPER, name);
@@ -450,6 +457,10 @@ static void dot(bool can_assign) {
     } else if (match(TOKEN_LEFT_PAREN)) {
         uint8_t arg_num = args();
         emit_byte3(OP_INVOKE, name, arg_num);
+#ifdef INLINE_CACHING
+        // Zero-initialize inline cache.
+        emit_byte_n(0, sizeof(cache_id_t) + sizeof(void *));
+#endif
     } else if (match(TOKEN_PLUS_PLUS)) {
         // Get/set field consumes an instance from the stack, so we have to duplicate it for the second call.
         emit_byte(OP_DUP);

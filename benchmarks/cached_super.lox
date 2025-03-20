@@ -1,0 +1,17 @@
+class P {
+    incr() { this.count++; }
+}
+
+class A < P {
+    init() { this.count=0; }
+    incr() { super.incr(); }
+}
+
+var a = A();
+
+var start = clock();
+for (var i = 0;i < 50000000;i++) {
+    a.incr();
+}
+print a.count;
+print clock() - start;
