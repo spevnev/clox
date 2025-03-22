@@ -41,6 +41,39 @@ const char *object_to_temp_cstr(const Object *object) {
     }
 }
 
+void free_object(Object *object) {
+#ifdef DEBUG_LOG_GC
+    printf("%p free type %d\n", (void *) object, object->type);
+#endif
+
+    switch (object->type) {
+        case OBJ_STRING: reallocate(object, sizeof(ObjString) + ((ObjString *) object)->length + 1, 0); break;
+        case OBJ_FUNCTION:
+            free_chunk(&((ObjFunction *) object)->chunk);
+            reallocate(object, sizeof(ObjFunction), 0);
+            break;
+        case OBJ_UPVALUE: reallocate(object, sizeof(ObjUpvalue), 0); break;
+        case OBJ_CLOSURE: {
+            ObjClosure *closure = (ObjClosure *) object;
+            ARRAY_REALLOC(closure->upvalues, closure->upvalues_length, 0);
+            reallocate(object, sizeof(ObjClosure), 0);
+        } break;
+        case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
+        case OBJ_CLASS:  {
+            ObjClass *class = (ObjClass *) object;
+            free_hashmap(&class->methods);
+            reallocate(object, sizeof(ObjClass), 0);
+        } break;
+        case OBJ_INSTANCE: {
+            ObjInstance *instance = (ObjInstance *) object;
+            free_hashmap(&instance->fields);
+            reallocate(object, sizeof(ObjInstance), 0);
+        } break;
+        case OBJ_BOUND_METHOD: reallocate(object, sizeof(ObjBoundMethod), 0); break;
+        default:               UNREACHABLE();
+    }
+}
+
 static Object *new_object(ObjectType type, uint32_t size) {
     Object *object = reallocate(NULL, 0, size);
     object->is_marked = false;
@@ -114,39 +147,6 @@ ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method) {
     bound_method->instance = instance;
     bound_method->method = method;
     return bound_method;
-}
-
-void free_object(Object *object) {
-#ifdef DEBUG_LOG_GC
-    printf("%p free type %d\n", (void *) object, object->type);
-#endif
-
-    switch (object->type) {
-        case OBJ_STRING: reallocate(object, sizeof(ObjString) + ((ObjString *) object)->length + 1, 0); break;
-        case OBJ_FUNCTION:
-            free_chunk(&((ObjFunction *) object)->chunk);
-            reallocate(object, sizeof(ObjFunction), 0);
-            break;
-        case OBJ_UPVALUE: reallocate(object, sizeof(ObjUpvalue), 0); break;
-        case OBJ_CLOSURE: {
-            ObjClosure *closure = (ObjClosure *) object;
-            ARRAY_REALLOC(closure->upvalues, closure->upvalues_length, 0);
-            reallocate(object, sizeof(ObjClosure), 0);
-        } break;
-        case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
-        case OBJ_CLASS:  {
-            ObjClass *class = (ObjClass *) object;
-            free_hashmap(&class->methods);
-            reallocate(object, sizeof(ObjClass), 0);
-        } break;
-        case OBJ_INSTANCE: {
-            ObjInstance *instance = (ObjInstance *) object;
-            free_hashmap(&instance->fields);
-            reallocate(object, sizeof(ObjInstance), 0);
-        } break;
-        case OBJ_BOUND_METHOD: reallocate(object, sizeof(ObjBoundMethod), 0); break;
-        default:               UNREACHABLE();
-    }
 }
 
 ObjString *copy_string(const char *cstr, uint32_t length) {
