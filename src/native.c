@@ -97,4 +97,4 @@ NativeDefinition native_defs[] = {
     // clang-format on
 };
 
-size_t native_defs_length() { return sizeof(native_defs) / sizeof(NativeDefinition); }
+size_t native_defs_length(void) { return sizeof(native_defs) / sizeof(NativeDefinition); }

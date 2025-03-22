@@ -501,11 +501,7 @@ static void template(UNUSED(bool can_assign)) {
 
     string(false);  // handle start
     while (!is_next(TOKEN_EOF) && !is_next(TOKEN_TEMPLATE_END)) {
-        if (match(TOKEN_STRING)) {
-            string(false);
-        } else {
-            expression();
-        }
+        expression();
         parts++;
     }
     expect(TOKEN_TEMPLATE_END, "Invalid template string");
