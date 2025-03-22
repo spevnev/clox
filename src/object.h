@@ -51,7 +51,7 @@ typedef struct {
     Object object;
     ObjFunction *function;
     uint32_t upvalues_length;
-    ObjUpvalue **upvalues;
+    ObjUpvalue *upvalues[];
 } ObjClosure;
 
 typedef struct {

@@ -55,8 +55,7 @@ void free_object(Object *object) {
         case OBJ_UPVALUE: reallocate(object, sizeof(ObjUpvalue), 0); break;
         case OBJ_CLOSURE: {
             ObjClosure *closure = (ObjClosure *) object;
-            ARRAY_REALLOC(closure->upvalues, closure->upvalues_length, 0);
-            reallocate(object, sizeof(ObjClosure), 0);
+            reallocate(object, sizeof(ObjClosure) + sizeof(*closure->upvalues) * closure->upvalues_length, 0);
         } break;
         case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
         case OBJ_CLASS:  {
@@ -103,17 +102,11 @@ ObjUpvalue *new_upvalue(Value *value) {
 }
 
 ObjClosure *new_closure(ObjFunction *function) {
-    ObjUpvalue **upvalues = NULL;
-    if (function->upvalues_count > 0) {
-        size_t upvalues_size = sizeof(*upvalues) * function->upvalues_count;
-        upvalues = reallocate(NULL, 0, upvalues_size);
-        memset(upvalues, 0, upvalues_size);
-    }
-
-    ObjClosure *closure = (ObjClosure *) new_object(OBJ_CLOSURE, sizeof(ObjClosure));
+    size_t upvalues_size = sizeof(ObjUpvalue *) * function->upvalues_count;
+    ObjClosure *closure = (ObjClosure *) new_object(OBJ_CLOSURE, sizeof(ObjClosure) + upvalues_size);
     closure->function = function;
-    closure->upvalues = upvalues;
     closure->upvalues_length = function->upvalues_count;
+    memset(closure->upvalues, 0, upvalues_size);
     return closure;
 }
 
