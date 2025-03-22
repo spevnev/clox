@@ -1,0 +1,3 @@
+/// Test whether template string gets interned (otherwise comparison will fail).
+
+print "10" == "{2 - 1}0"; // true

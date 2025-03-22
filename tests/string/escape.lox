@@ -1,0 +1,4 @@
+print "Escaped: \{ \} \" \\"; // Escaped: { } " \
+
+//print "Escaped: \{ \} \\"";
+//print "

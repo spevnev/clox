@@ -260,7 +260,24 @@ static InterpretResult run(void) {
             case OP_GET_UPVALUE: stack_push(*vm.frame->closure->upvalues[READ_U8()]->location); break;
             case OP_SET_UPVALUE: *vm.frame->closure->upvalues[READ_U8()]->location = stack_peek(0); break;
             case OP_PRINT:       printf("%s\n", value_to_temp_cstr(stack_pop())); break;
-            case OP_JUMP:        {
+            case OP_CONCAT:      {
+                uint8_t parts = READ_U8();
+                uint32_t length = 0;
+                for (uint8_t i = 0; i < parts; i++) length += strlen(value_to_temp_cstr(stack_peek(i)));
+
+                ObjString* string = create_new_string(length);
+                char* current = string->cstr;
+                for (int i = parts - 1; i >= 0; i--) {
+                    const char* part = value_to_temp_cstr(stack_peek(i));
+                    uint32_t length = strlen(part);
+
+                    memcpy(current, part, length);
+                    current += length;
+                }
+                stack_popn(parts);
+                stack_push(VALUE_OBJECT(finish_new_string(string)));
+            } break;
+            case OP_JUMP: {
                 uint16_t offset = READ_U16();
                 vm.frame->ip += offset;
             } break;

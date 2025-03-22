@@ -31,6 +31,7 @@ typedef enum {
     OP_GET_UPVALUE,
     OP_SET_UPVALUE,
     OP_PRINT,
+    OP_CONCAT,
     OP_JUMP,
     OP_JUMP_IF_FALSE,
     OP_JUMP_IF_TRUE,

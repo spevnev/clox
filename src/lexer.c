@@ -70,22 +70,33 @@ static void skip_whitespace(void) {
     }
 }
 
-static Token string(void) {
+static Token string(bool is_template) {
     Loc loc = get_loc();
 
     while (!is_done() && peek() != '"') {
-        if (peek() == '\n') {
-            next_line();
-        } else {
-            advance();
+        bool is_escaped = false;
+        while (match('\\')) is_escaped = !is_escaped;
+
+        switch (peek()) {
+            case '{':
+                if (is_escaped) {
+                    advance();
+                    break;
+                } else {
+                    l.template_count++;
+                    advance();
+                    return new_token(is_template ? TOKEN_STRING : TOKEN_TEMPLATE_START);
+                }
+            case '\n': next_line(); break;
+            case '"':
+                if (is_escaped) advance();
+                break;
+            default: advance(); break;
         }
     }
+    if (!match('"')) return error_token(loc, "Unterminated string");
 
-    if (match('"')) {
-        return new_token(TOKEN_STRING);
-    } else {
-        return error_token(loc, "Unterminated string");
-    }
+    return new_token(is_template ? TOKEN_TEMPLATE_END : TOKEN_STRING);
 }
 
 static Token number(void) {
@@ -158,7 +169,13 @@ Token next_token(void) {
         case '(': return new_token(TOKEN_LEFT_PAREN);
         case ')': return new_token(TOKEN_RIGHT_PAREN);
         case '{': return new_token(TOKEN_LEFT_BRACE);
-        case '}': return new_token(TOKEN_RIGHT_BRACE);
+        case '}':
+            if (l.template_count > 0) {
+                l.template_count--;
+                return string(true);
+            } else {
+                return new_token(TOKEN_RIGHT_BRACE);
+            }
         case ';': return new_token(TOKEN_SEMICOLON);
         case ':': return new_token(TOKEN_COLON);
         case ',': return new_token(TOKEN_COMMA);
@@ -172,7 +189,7 @@ Token next_token(void) {
         case '=': return new_token(match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
         case '<': return new_token(match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
         case '>': return new_token(match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
-        case '"': return string();
+        case '"': return string(false);
         default:
             if (is_digit(c)) return number();
             if (is_alpha(c)) return identifier();

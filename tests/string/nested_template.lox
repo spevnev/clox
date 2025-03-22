@@ -1,0 +1,5 @@
+var string = "inside a ";
+var part = "mpl";
+
+// template inside a template
+print "template {string + "te{part}ate"}";

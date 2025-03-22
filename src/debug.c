@@ -65,6 +65,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_GET_UPVALUE:   U8_INSTR("get upvalue"); break;
         case OP_SET_UPVALUE:   U8_INSTR("set upvalue"); break;
         case OP_PRINT:         INSTR("print"); break;
+        case OP_CONCAT:        U8_INSTR("concat"); break;
         case OP_JUMP:          JUMP_INSTR("jump"); break;
         case OP_JUMP_IF_FALSE: JUMP_INSTR("jump if false"); break;
         case OP_JUMP_IF_TRUE:  JUMP_INSTR("jump if true"); break;

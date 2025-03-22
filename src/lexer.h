@@ -33,6 +33,8 @@ typedef enum {
     // Literals
     TOKEN_IDENTIFIER,
     TOKEN_STRING,
+    TOKEN_TEMPLATE_START,
+    TOKEN_TEMPLATE_END,
     TOKEN_NUMBER,
 
     // Keywords
@@ -72,6 +74,7 @@ typedef struct {
     const char *current;
     const char *line_start;
     uint32_t line;
+    uint32_t template_count;
 } Lexer;
 
 void init_lexer(const char *source);

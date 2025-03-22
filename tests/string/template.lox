@@ -1,0 +1,8 @@
+class A {}
+
+var a = A();
+var num = 1.234;
+var string = "string";
+
+// This is a template string: A, A instance, 1.234, string
+print "This is a template string: {A}, {a}, {num}, {string}";

@@ -192,3 +192,22 @@ ObjString *concat_strings(const ObjString *a, const ObjString *b) {
 
     return string;
 }
+
+ObjString *create_new_string(uint32_t length) {
+    ObjString *string = (ObjString *) new_object(OBJ_STRING, sizeof(ObjString) + length + 1);
+    string->cstr[length] = '\0';
+    string->length = length;
+    return string;
+}
+
+ObjString *finish_new_string(ObjString *string) {
+    string->hash = hash_string(string->cstr, string->length);
+
+    ObjString *interned_string = hashmap_find_key(&vm.strings, string->cstr, string->length, string->hash);
+    if (interned_string != NULL) return interned_string;
+
+    stack_push(VALUE_OBJECT(string));
+    hashmap_set(&vm.strings, string, VALUE_NIL());
+    stack_pop();
+    return string;
+}

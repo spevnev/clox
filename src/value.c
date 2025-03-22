@@ -11,7 +11,14 @@ const char *value_to_temp_cstr(Value value) {
     switch (value.type) {
         case VAL_NIL:    return "nil";
         case VAL_BOOL:   return value.as.boolean ? "true" : "false";
-        case VAL_NUMBER: snprintf(CSTR, sizeof(CSTR), "%g", value.as.number); return CSTR;
+        case VAL_NUMBER: {
+            int length = snprintf(CSTR, sizeof(CSTR), "%.10f", value.as.number);
+            // Remove trailing zeroes
+            while (CSTR[length - 1] == '0') length--;
+            if (CSTR[length - 1] == '.') length--;
+            CSTR[length] = '\0';
+            return CSTR;
+        }
         case VAL_OBJECT: return object_to_temp_cstr(value.as.object);
         default:         UNREACHABLE();
     }

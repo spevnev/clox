@@ -335,8 +335,24 @@ static void nil(UNUSED(bool can_assign)) { emit_byte(OP_NIL); }
 static void true_(UNUSED(bool can_assign)) { emit_byte(OP_TRUE); }
 static void false_(UNUSED(bool can_assign)) { emit_byte(OP_FALSE); }
 static void number(UNUSED(bool can_assign)) { emit_constant(VALUE_NUMBER(strtod(p.previous.start, NULL))); }
+
 static void string(UNUSED(bool can_assign)) {
-    emit_constant(VALUE_OBJECT(copy_string(p.previous.start + 1, p.previous.length - 2)));
+    uint32_t length = p.previous.length - 2;
+    const char *cur_src = p.previous.start + 1;
+    const char *end = cur_src + length;
+
+    char *string = malloc(length);
+    char *cur_dst = string;
+    while (cur_src < end) {
+        if (*cur_src == '\\') {
+            cur_src++;
+            length--;
+        }
+        *(cur_dst++) = *(cur_src++);
+    }
+
+    emit_constant(VALUE_OBJECT(copy_string(string, length)));
+    free(string);
 }
 
 static void variable(bool can_assign) { named_var(p.previous, can_assign); }
@@ -479,34 +495,54 @@ static void dot(bool can_assign) {
     }
 }
 
+static void template(UNUSED(bool can_assign)) {
+    // Template at least has start and end tokens which contain parts.
+    uint8_t parts = 2;
+
+    string(false);  // handle start
+    while (!is_next(TOKEN_EOF) && !is_next(TOKEN_TEMPLATE_END)) {
+        if (match(TOKEN_STRING)) {
+            string(false);
+        } else {
+            expression();
+        }
+        parts++;
+    }
+    expect(TOKEN_TEMPLATE_END, "Invalid template string");
+    string(false);  // handle end
+
+    emit_byte2(OP_CONCAT, parts);
+}
+
 static const ParseRule rules[TOKEN_COUNT] = {
     // clang-format off
-    // token                  prefix,   infix,       precedence
-    [TOKEN_NIL]           = { nil,      NULL,        PREC_NONE        },
-    [TOKEN_TRUE]          = { true_,    NULL,        PREC_NONE        },
-    [TOKEN_FALSE]         = { false_,   NULL,        PREC_NONE        },
-    [TOKEN_NUMBER]        = { number,   NULL,        PREC_NONE        },
-    [TOKEN_STRING]        = { string,   NULL,        PREC_NONE        },
-    [TOKEN_IDENTIFIER]    = { variable, NULL,        PREC_NONE        },
-    [TOKEN_THIS]          = { this,     NULL,        PREC_NONE        },
-    [TOKEN_SUPER]         = { super,    NULL,        PREC_NONE        },
-    [TOKEN_BANG]          = { unary,    NULL,        PREC_NONE        },
-    [TOKEN_MINUS_MINUS]   = { unary,    NULL,        PREC_NONE        },
-    [TOKEN_MINUS]         = { unary,    binary,      PREC_TERM        },
-    [TOKEN_PLUS]          = { NULL,     binary,      PREC_TERM        },
-    [TOKEN_SLASH]         = { NULL,     binary,      PREC_FACTOR      },
-    [TOKEN_STAR]          = { NULL,     binary,      PREC_FACTOR      },
-    [TOKEN_BANG_EQUAL]    = { NULL,     binary,      PREC_EQUALITY    },
-    [TOKEN_EQUAL_EQUAL]   = { NULL,     binary,      PREC_EQUALITY    },
-    [TOKEN_GREATER]       = { NULL,     binary,      PREC_COMPARISON  },
-    [TOKEN_GREATER_EQUAL] = { NULL,     binary,      PREC_COMPARISON  },
-    [TOKEN_LESS]          = { NULL,     binary,      PREC_COMPARISON  },
-    [TOKEN_LESS_EQUAL]    = { NULL,     binary,      PREC_COMPARISON  },
-    [TOKEN_AND]           = { NULL,     and_,        PREC_AND         },
-    [TOKEN_OR]            = { NULL,     or_,         PREC_OR          },
-    [TOKEN_QUESTION]      = { NULL,     conditional, PREC_CONDITIONAL },
-    [TOKEN_LEFT_PAREN]    = { grouping, call,        PREC_CALL        },
-    [TOKEN_DOT]           = { NULL,     dot,         PREC_CALL        },
+    // token                   prefix,   infix,       precedence
+    [TOKEN_NIL]            = { nil,      NULL,        PREC_NONE        },
+    [TOKEN_TRUE]           = { true_,    NULL,        PREC_NONE        },
+    [TOKEN_FALSE]          = { false_,   NULL,        PREC_NONE        },
+    [TOKEN_NUMBER]         = { number,   NULL,        PREC_NONE        },
+    [TOKEN_STRING]         = { string,   NULL,        PREC_NONE        },
+    [TOKEN_IDENTIFIER]     = { variable, NULL,        PREC_NONE        },
+    [TOKEN_THIS]           = { this,     NULL,        PREC_NONE        },
+    [TOKEN_SUPER]          = { super,    NULL,        PREC_NONE        },
+    [TOKEN_BANG]           = { unary,    NULL,        PREC_NONE        },
+    [TOKEN_MINUS_MINUS]    = { unary,    NULL,        PREC_NONE        },
+    [TOKEN_MINUS]          = { unary,    binary,      PREC_TERM        },
+    [TOKEN_PLUS]           = { NULL,     binary,      PREC_TERM        },
+    [TOKEN_SLASH]          = { NULL,     binary,      PREC_FACTOR      },
+    [TOKEN_STAR]           = { NULL,     binary,      PREC_FACTOR      },
+    [TOKEN_BANG_EQUAL]     = { NULL,     binary,      PREC_EQUALITY    },
+    [TOKEN_EQUAL_EQUAL]    = { NULL,     binary,      PREC_EQUALITY    },
+    [TOKEN_GREATER]        = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_GREATER_EQUAL]  = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_LESS]           = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_LESS_EQUAL]     = { NULL,     binary,      PREC_COMPARISON  },
+    [TOKEN_AND]            = { NULL,     and_,        PREC_AND         },
+    [TOKEN_OR]             = { NULL,     or_,         PREC_OR          },
+    [TOKEN_QUESTION]       = { NULL,     conditional, PREC_CONDITIONAL },
+    [TOKEN_LEFT_PAREN]     = { grouping, call,        PREC_CALL        },
+    [TOKEN_DOT]            = { NULL,     dot,         PREC_CALL        },
+    [TOKEN_TEMPLATE_START] = { template, NULL,        PREC_NONE        },
     // clang-format on
 };
 

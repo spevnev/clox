@@ -102,6 +102,13 @@ ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method);
 ObjString *copy_string(const char *cstr, uint32_t length);
 ObjString *concat_strings(const ObjString *a, const ObjString *b);
 
+// Create a new string of the given length for callee to fill `cstr`.
+// After filling in the entire length, callee must `finish_new_string`.
+ObjString *create_new_string(uint32_t length);
+// Finishes string creation by setting hash and interning it.
+// Returns interned string or the same one.
+ObjString *finish_new_string(ObjString *string);
+
 static inline bool is_object_type(Value value, ObjectType type) {
     return value.type == VAL_OBJECT && value.as.object->type == type;
 }
