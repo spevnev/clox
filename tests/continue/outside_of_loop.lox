@@ -1,0 +1,1 @@
+continue; // [ERROR] Cannot continue outside of loop at 1:1.

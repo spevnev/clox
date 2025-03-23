@@ -1,0 +1,14 @@
+var i = 0;
+while (i < 5) {
+    i = i + 1;
+    if (i == 3) {
+        print "skip";
+        continue;
+    }
+    print i;
+}
+// 1
+// 2
+// skip
+// 4
+// 5

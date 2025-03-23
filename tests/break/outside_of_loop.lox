@@ -1,0 +1,1 @@
+break; // [ERROR] Cannot break outside of loop at 1:1.

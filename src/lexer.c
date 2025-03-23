@@ -117,7 +117,15 @@ static TokenType check_keyword(uint32_t offset, uint32_t length, const char *res
 static TokenType get_identifier_type(void) {
     switch (l.start[0]) {
         case 'a': return check_keyword(1, 2, "nd", TOKEN_AND);
-        case 'c': return check_keyword(1, 4, "lass", TOKEN_CLASS);
+        case 'b': return check_keyword(1, 4, "reak", TOKEN_BREAK);
+        case 'c':
+            if (token_length() > 1) {
+                switch (l.start[1]) {
+                    case 'l': return check_keyword(2, 3, "ass", TOKEN_CLASS);
+                    case 'o': return check_keyword(2, 6, "ntinue", TOKEN_CONTINUE);
+                }
+            }
+            break;
         case 'e': return check_keyword(1, 3, "lse", TOKEN_ELSE);
         case 'f':
             if (token_length() > 1) {

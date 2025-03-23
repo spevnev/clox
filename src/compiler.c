@@ -60,10 +60,17 @@ typedef struct {
     uint8_t index;
 } Upvalue;
 
+// Contains instruction to which break/continue should jump (using loop).
+typedef struct {
+    uint32_t continue_loop;
+    uint32_t break_loop;
+} Loop;
+
 typedef struct Compiler {
     struct Compiler *enclosing;
     FunctionType function_type;
     ObjFunction *function;
+    Loop *loop;
     int scope_depth;
     uint32_t locals_count;
     Local locals[LOCALS_SIZE];
@@ -718,10 +725,19 @@ static void while_stmt(void) {
     expression();
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after condition");
 
+    uint32_t break_loop = current_chunk()->length;
     uint32_t exit_jump = emit_jump(OP_JUMP_IF_FALSE);
     emit_byte(OP_POP);
 
+    Loop *prev_loop = c->loop;
+    Loop loop = {
+        .continue_loop = loop_start,
+        .break_loop = break_loop,
+    };
+    c->loop = &loop;
     statement();
+    c->loop = prev_loop;
+
     emit_loop(loop_start);
 
     patch_jump(exit_jump);
@@ -743,14 +759,16 @@ static void for_stmt(void) {
     }
 
     uint32_t loop_start = current_chunk()->length;
-    uint32_t exit_jump = 0;
     if (!match(TOKEN_SEMICOLON)) {
         expression();
         expect(TOKEN_SEMICOLON, "Expected ';' after condition clause of 'for'");
-
-        exit_jump = emit_jump(OP_JUMP_IF_FALSE);
-        emit_byte(OP_POP);
+    } else {
+        emit_byte(OP_TRUE);
     }
+
+    uint32_t break_loop = current_chunk()->length;
+    uint32_t exit_jump = emit_jump(OP_JUMP_IF_FALSE);
+    emit_byte(OP_POP);
 
     if (!match(TOKEN_RIGHT_PAREN)) {
         // If the loop has update clause, then we skip it after condition clause
@@ -768,13 +786,18 @@ static void for_stmt(void) {
         patch_jump(body_jump);
     }
 
+    Loop *prev_loop = c->loop;
+    Loop loop = {
+        .continue_loop = loop_start,
+        .break_loop = break_loop,
+    };
+    c->loop = &loop;
     statement();
-    emit_loop(loop_start);
+    c->loop = prev_loop;
 
-    if (exit_jump != 0) {
-        patch_jump(exit_jump);
-        emit_byte(OP_POP);
-    }
+    emit_loop(loop_start);
+    patch_jump(exit_jump);
+    emit_byte(OP_POP);
 
     end_scope();
 }
@@ -794,6 +817,34 @@ static void return_stmt(void) {
     }
 }
 
+static void break_stmt(void) {
+    Loc loc = p.current.loc;
+    advance();
+    expect(TOKEN_SEMICOLON, "Expected ';' after break");
+
+    if (c->loop == NULL) {
+        error_at(loc, "Cannot break outside of loop");
+        return;
+    }
+
+    // Break jumps to OP_JUMP_IF_FALSE which jumps to the end of the loop.
+    emit_byte(OP_FALSE);
+    emit_loop(c->loop->break_loop);
+}
+
+static void continue_stmt(void) {
+    Loc loc = p.current.loc;
+    advance();
+    expect(TOKEN_SEMICOLON, "Expected ';' after continue");
+
+    if (c->loop == NULL) {
+        error_at(loc, "Cannot continue outside of loop");
+        return;
+    }
+
+    emit_loop(c->loop->continue_loop);
+}
+
 static void statement(void) {
     switch (p.current.type) {
         case TOKEN_LEFT_BRACE:
@@ -801,12 +852,14 @@ static void statement(void) {
             block();
             end_scope();
             break;
-        case TOKEN_PRINT:  print_stmt(); break;
-        case TOKEN_IF:     if_stmt(); break;
-        case TOKEN_WHILE:  while_stmt(); break;
-        case TOKEN_FOR:    for_stmt(); break;
-        case TOKEN_RETURN: return_stmt(); break;
-        default:           expression_stmt(); break;
+        case TOKEN_PRINT:    print_stmt(); break;
+        case TOKEN_IF:       if_stmt(); break;
+        case TOKEN_WHILE:    while_stmt(); break;
+        case TOKEN_FOR:      for_stmt(); break;
+        case TOKEN_RETURN:   return_stmt(); break;
+        case TOKEN_BREAK:    break_stmt(); break;
+        case TOKEN_CONTINUE: continue_stmt(); break;
+        default:             expression_stmt(); break;
     }
 }
 
