@@ -1,0 +1,9 @@
+fun func() {}
+
+var a = 5;
+switch (a) {
+    case func(): print "invalid"; // [ERROR] Expected constant expression at 5:10.
+    case "template {a}": print "invalid"; // [ERROR] Expected constant expression at 6:10.
+    case a: print "invalid"; // [ERROR] Expected constant expression at 7:10.
+    case (3): print "invalid"; // [ERROR] Expected constant expression at 8:10.
+}

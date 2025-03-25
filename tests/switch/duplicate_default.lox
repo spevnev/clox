@@ -1,0 +1,6 @@
+var a = 5;
+switch (a) {
+    case 0: print "0";
+    default: print "d";
+    default: print "d"; // [ERROR] Switch cannot have multiple default cases at 5:12.
+}

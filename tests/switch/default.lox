@@ -1,0 +1,31 @@
+for (var i = 0;i < 4;i++) {
+    switch (i) {
+        case 0: print "0";
+        default: print "d";
+        case 1: print "1";
+    }
+    switch (i) {
+        default: print "d";
+        case 2: print "2";
+    }
+    switch (i) {
+        case 3: print "3";
+        default: print "d";
+    }
+}
+
+// 0
+// d
+// d
+
+// 1
+// d
+// d
+
+// d
+// 2
+// d
+
+// d
+// d
+// 3

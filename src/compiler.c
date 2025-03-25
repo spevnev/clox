@@ -22,7 +22,6 @@ typedef enum {
     PREC_FACTOR,       // * /
     PREC_UNARY,        // ! -
     PREC_CALL,         // . ()
-    PREC_PRIMARY,
 } Precedence;
 
 typedef struct {
@@ -139,6 +138,8 @@ static bool match(TokenType type) {
 
 static Chunk *current_chunk(void) { return &c->function->chunk; }
 
+static uint32_t current_offset(void) { return current_chunk()->length; }
+
 static uint8_t add_constant(Value constant) {
     stack_push(constant);
     uint32_t index = push_constant(current_chunk(), constant);
@@ -183,14 +184,14 @@ static void emit_pop(uint8_t n) {
 // Emits a jump instruction with placeholder operand and returns the offset to backpatch it later.
 static uint32_t emit_jump(uint8_t jump_op) {
     emit_byte(jump_op);
-    uint32_t operand_offset = current_chunk()->length;
+    uint32_t operand_offset = current_offset();
     emit_byte2(0xFF, 0xFF);
     return operand_offset;
 }
 
 static void patch_jump(uint32_t offset) {
     // -2 adjusts for the 16-bit jump operand that is already skipped.
-    uint32_t jump = current_chunk()->length - offset - 2;
+    uint32_t jump = current_offset() - offset - 2;
     if (jump > UINT16_MAX) error_at(current_chunk()->locs[offset], "Jump target is too far");
     memcpy(current_chunk()->code + offset, &jump, sizeof(uint16_t));
 }
@@ -199,7 +200,7 @@ static void patch_jump(uint32_t offset) {
 static void emit_loop(uint32_t loop_start) {
     emit_byte(OP_LOOP);
     // 2 adjusts for the loop instruction and its operand.
-    uint32_t offset = current_chunk()->length + 2 - loop_start;
+    uint32_t offset = current_offset() + 2 - loop_start;
     if (offset > UINT16_MAX) error_at(current_chunk()->locs[loop_start], "Loop body is too big");
     emit_byte2(offset & 0xFF, (offset >> 8) & 0xFF);
 }
@@ -243,6 +244,27 @@ static void parse_precedence(Precedence precedence) {
 }
 
 static void expression(void) { parse_precedence(PREC_ASSIGNMENT); }
+
+static void constant_expression(void) {
+    switch (p.current.type) {
+        case TOKEN_NIL:
+        case TOKEN_TRUE:
+        case TOKEN_FALSE:
+        case TOKEN_NUMBER:
+        case TOKEN_STRING: advance(); break;
+        case TOKEN_MINUS:
+            advance();
+            if (p.current.type == TOKEN_NUMBER) break;
+            // fallthrough
+        default:
+            error_current("Expected constant expression");
+            expression();
+            return;
+    }
+
+    ParseFn prefix_rule = get_rule(p.previous.type)->prefix;
+    prefix_rule(false);
+}
 
 static bool token_equals(Token a, Token b) { return a.length == b.length && memcmp(a.start, b.start, a.length) == 0; }
 
@@ -673,8 +695,9 @@ static void synchronize(void) {
             case TOKEN_WHILE:
             case TOKEN_PRINT:
             case TOKEN_RETURN:
-            case TOKEN_LEFT_BRACE: return;
-            default:               advance(); break;
+            case TOKEN_LEFT_BRACE:
+            case TOKEN_RIGHT_BRACE: return;
+            default:                advance(); break;
         }
     }
 }
@@ -718,14 +741,14 @@ static void if_stmt(void) {
 }
 
 static void while_stmt(void) {
-    uint32_t loop_start = current_chunk()->length;
+    uint32_t loop_start = current_offset();
 
     advance();
     expect(TOKEN_LEFT_PAREN, "Expected '(' after 'while'");
     expression();
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after condition");
 
-    uint32_t break_loop = current_chunk()->length;
+    uint32_t break_loop = current_offset();
     uint32_t exit_jump = emit_jump(OP_JUMP_IF_FALSE);
     emit_byte(OP_POP);
 
@@ -758,7 +781,7 @@ static void for_stmt(void) {
         expect(TOKEN_SEMICOLON, "Expected ';' after initializer clause of 'for'");
     }
 
-    uint32_t loop_start = current_chunk()->length;
+    uint32_t loop_start = current_offset();
     if (!match(TOKEN_SEMICOLON)) {
         expression();
         expect(TOKEN_SEMICOLON, "Expected ';' after condition clause of 'for'");
@@ -766,7 +789,7 @@ static void for_stmt(void) {
         emit_byte(OP_TRUE);
     }
 
-    uint32_t break_loop = current_chunk()->length;
+    uint32_t break_loop = current_offset();
     uint32_t exit_jump = emit_jump(OP_JUMP_IF_FALSE);
     emit_byte(OP_POP);
 
@@ -775,7 +798,7 @@ static void for_stmt(void) {
         // using body_jump and then return by changing loop_start to point here.
         uint32_t body_jump = emit_jump(OP_JUMP);
 
-        uint32_t update_start = current_chunk()->length;
+        uint32_t update_start = current_offset();
         expression();
         emit_byte(OP_POP);
         expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after for loop's clauses");
@@ -845,6 +868,71 @@ static void continue_stmt(void) {
     emit_loop(c->loop->continue_loop);
 }
 
+static void switch_stmt(void) {
+    advance();
+    expect(TOKEN_LEFT_PAREN, "Expected '(' after 'switch'");
+    expression();
+    expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after expression");
+    expect(TOKEN_LEFT_BRACE, "Expected '{' before switch body");
+
+    const uint32_t max_cases = 128;
+    uint32_t exit_jumps_idx = 0;
+    uint32_t exit_jumps[max_cases];
+    uint32_t default_offset = 0;
+    uint32_t case_jump = 0;
+    while (!is_next(TOKEN_EOF) && !is_next(TOKEN_RIGHT_BRACE)) {
+        uint32_t jump_over_default = 0;
+        if (match(TOKEN_DEFAULT)) {
+            jump_over_default = emit_jump(OP_JUMP);
+
+            if (default_offset != 0) error_current("Switch cannot have multiple default cases");
+            default_offset = current_offset();
+        } else {
+            expect(TOKEN_CASE, "Expected case inside of switch");
+
+            if (case_jump != 0) {
+                patch_jump(case_jump);
+                emit_byte(OP_POP);
+            }
+
+            // Duplicate switch value since equal consumes both operands.
+            emit_byte(OP_DUP);
+
+            // Allow only constant expression to avoid reasoning about order of execution
+            // of case expressions that have side effects. In addition, this allows to
+            // implement optimizations such as jump table.
+            constant_expression();
+            emit_byte(OP_EQUAL);
+            case_jump = emit_jump(OP_JUMP_IF_FALSE);
+            emit_byte(OP_POP);
+        }
+
+        expect(TOKEN_COLON, "Expected ':' after case");
+
+        statement();
+
+        if (exit_jumps_idx >= max_cases) {
+            error_current("Too many cases in one switch");
+            p.is_panicking = true;
+            return;
+        }
+        exit_jumps[exit_jumps_idx++] = emit_jump(OP_JUMP);
+
+        if (jump_over_default != 0) patch_jump(jump_over_default);
+    }
+    expect(TOKEN_RIGHT_BRACE, "Unclosed '{', expected '}' at the end of switch body");
+
+    if (case_jump != 0) {
+        patch_jump(case_jump);
+        emit_byte(OP_POP);  // jump's operand
+    }
+
+    if (default_offset != 0) emit_loop(default_offset);
+
+    for (uint32_t i = 0; i < exit_jumps_idx; i++) patch_jump(exit_jumps[i]);
+    emit_byte(OP_POP);  // expression's result
+}
+
 static void statement(void) {
     switch (p.current.type) {
         case TOKEN_LEFT_BRACE:
@@ -859,6 +947,7 @@ static void statement(void) {
         case TOKEN_RETURN:   return_stmt(); break;
         case TOKEN_BREAK:    break_stmt(); break;
         case TOKEN_CONTINUE: continue_stmt(); break;
+        case TOKEN_SWITCH:   switch_stmt(); break;
         default:             expression_stmt(); break;
     }
 }
