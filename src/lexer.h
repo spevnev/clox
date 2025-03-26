@@ -39,6 +39,8 @@ typedef enum {
 
     // Keywords
     TOKEN_AND,
+    TOKEN_ASYNC,
+    TOKEN_AWAIT,
     TOKEN_BREAK,
     TOKEN_CASE,
     TOKEN_CLASS,
@@ -59,6 +61,7 @@ typedef enum {
     TOKEN_TRUE,
     TOKEN_VAR,
     TOKEN_WHILE,
+    TOKEN_YIELD,
 
     // Special
     TOKEN_ERROR,

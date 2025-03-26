@@ -52,6 +52,7 @@ typedef enum {
     FUN_FUNCTION,
     FUN_METHOD,
     FUN_INITIALIZER,
+    FUN_ASYNC,
 } FunctionType;
 
 typedef struct {
@@ -934,6 +935,17 @@ static void switch_stmt(void) {
     emit_byte(OP_POP);  // expression's result
 }
 
+static void yield_stmt(void) {
+    Loc loc = p.current.loc;
+    advance();
+    expect(TOKEN_SEMICOLON, "Expected ';' after yield");
+
+    if (c->function_type != FUN_ASYNC) {
+        error_at(loc, "Cannot yield outside of async function");
+        return;
+    }
+}
+
 static void statement(void) {
     switch (p.current.type) {
         case TOKEN_LEFT_BRACE:
@@ -949,6 +961,7 @@ static void statement(void) {
         case TOKEN_BREAK:    break_stmt(); break;
         case TOKEN_CONTINUE: continue_stmt(); break;
         case TOKEN_SWITCH:   switch_stmt(); break;
+        case TOKEN_YIELD:    yield_stmt(); break;
         default:             expression_stmt(); break;
     }
 }
@@ -1007,12 +1020,15 @@ static void function(FunctionType type) {
 
 static void fun_decl(void) {
     advance();
+
+    bool is_async = p.previous.type == TOKEN_ASYNC;
+    if (is_async) expect(TOKEN_FUN, "Expected 'fun' after 'async'");
     expect(TOKEN_IDENTIFIER, "Expected function name after 'fun'");
 
     uint8_t global = declare_var();
     mark_initialized();  // Define it right away to allow recursive functions.
 
-    function(FUN_FUNCTION);
+    function(is_async ? FUN_ASYNC : FUN_FUNCTION);
 
     define_var(global);
 }
@@ -1067,7 +1083,8 @@ static void class_decl(void) {
 static void declaration(void) {
     switch (p.current.type) {
         case TOKEN_VAR:   var_decl(); break;
-        case TOKEN_FUN:   fun_decl(); break;
+        case TOKEN_FUN:
+        case TOKEN_ASYNC: fun_decl(); break;
         case TOKEN_CLASS: class_decl(); break;
         default:          statement(); break;
     }
