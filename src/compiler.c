@@ -371,6 +371,7 @@ static void string(UNUSED(bool can_assign)) {
     const char *end = cur_src + length;
 
     char *string = malloc(length);
+    if (string == NULL) OUT_OF_MEMORY();
     char *cur_dst = string;
     while (cur_src < end) {
         if (*cur_src == '\\') {

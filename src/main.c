@@ -18,7 +18,7 @@ static char *read_entire_file(const char *path) {
     fseek(file, 0L, SEEK_SET);
 
     char *buffer = malloc(size + 1);
-    if (buffer == NULL) PANIC("Not enough memory to read file \"%s\"", path);
+    if (buffer == NULL) OUT_OF_MEMORY();
 
     size_t bytes_read = fread(buffer, sizeof(char), size, file);
     if (bytes_read < size) {
