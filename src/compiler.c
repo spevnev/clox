@@ -580,7 +580,7 @@ static void init_compiler(Compiler *compiler, FunctionType function_type, ObjStr
     compiler->function_type = function_type;
 
     stack_push(VALUE_OBJECT(name));
-    compiler->function = new_function(name);
+    compiler->function = new_function(name, function_type == FUN_ASYNC);
     stack_pop();
 
     // First slot is reserved for instance (this) in methods, or closure in functions.
@@ -944,6 +944,8 @@ static void yield_stmt(void) {
         error_at(loc, "Cannot yield outside of async function");
         return;
     }
+
+    emit_byte(OP_YIELD);
 }
 
 static void statement(void) {

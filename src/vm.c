@@ -16,8 +16,8 @@ VM vm = {0};
 #ifdef DEBUG_TRACE_EXECUTION
 static void print_stack(void) {
     printf("Stack: ");
-    for (const Value *value = vm.stack; value < vm.stack_top; value++) {
-        if (value != vm.stack) printf(", ");
+    for (const Value *value = vm.coroutine->stack; value < vm.coroutine->stack_top; value++) {
+        if (value != vm.coroutine->stack) printf(", ");
         printf("%s", value_to_temp_cstr(*value));
     }
     printf("\n");
@@ -27,7 +27,7 @@ static void print_stack(void) {
 static void print_stacktrace(void) {
 #ifndef HIDE_STACKTRACE
     fprintf(stderr, "Stacktrace:\n");
-    for (CallFrame *frame = vm.frame; frame >= vm.frames; frame--) {
+    for (CallFrame *frame = vm.coroutine->frame; frame >= vm.coroutine->frames; frame--) {
         ObjFunction *function = frame->closure->function;
         Loc loc = function->chunk.locs[frame->ip - function->chunk.code - 1];
         fprintf(stderr, "    '%s' at %u:%u\n", function->name->cstr, loc.line, loc.column);
@@ -36,32 +36,40 @@ static void print_stacktrace(void) {
 }
 
 void runtime_error(const char *fmt, ...) {
-    Chunk *chunk = &vm.frame->closure->function->chunk;
+    Chunk *chunk = &vm.coroutine->frame->closure->function->chunk;
     va_list args;
     va_start(args, fmt);
-    error_varg(chunk->locs[vm.frame->ip - chunk->code - 1], fmt, args);
+    error_varg(chunk->locs[vm.coroutine->frame->ip - chunk->code - 1], fmt, args);
     va_end(args);
     print_stacktrace();
 }
 
 void stack_push(Value value) {
-    assert(vm.stack_top - vm.stack < STACK_SIZE && "Stack overflow");
-    *(vm.stack_top++) = value;
+    assert(vm.coroutine->stack_top - vm.coroutine->stack < STACK_SIZE && "Stack overflow");
+    *(vm.coroutine->stack_top++) = value;
 }
 
 Value stack_pop(void) {
-    assert(vm.stack_top > vm.stack && "Stack underflow");
-    return *(--vm.stack_top);
+    assert(vm.coroutine->stack_top > vm.coroutine->stack && "Stack underflow");
+    return *(--vm.coroutine->stack_top);
 }
 
 void stack_popn(uint8_t n) {
-    vm.stack_top -= n;
-    assert(vm.stack_top >= vm.stack && "Stack underflow");
+    vm.coroutine->stack_top -= n;
+    assert(vm.coroutine->stack_top >= vm.coroutine->stack && "Stack underflow");
 }
 
 Value stack_peek(uint32_t distance) {
-    assert(distance < vm.stack_top - vm.stack && "Peek distance points outside of stack");
-    return *(vm.stack_top - distance - 1);
+    assert(distance < vm.coroutine->stack_top - vm.coroutine->stack && "Peek distance points outside of stack");
+    return *(vm.coroutine->stack_top - distance - 1);
+}
+
+// Creates the first callframe in the new coroutine.
+static void init_callstack(Coroutine *coroutine, ObjClosure *closure) {
+    CallFrame *frame = coroutine->frame = coroutine->frames;
+    frame->closure = closure;
+    frame->ip = closure->function->chunk.code;
+    frame->slots = coroutine->stack;
 }
 
 static bool call(ObjClosure *closure, uint8_t arg_num) {
@@ -71,15 +79,35 @@ static bool call(ObjClosure *closure, uint8_t arg_num) {
         return false;
     }
 
-    if (vm.frame - vm.frames + 1 == CALLSTACK_SIZE) {
-        runtime_error("Stack overflow");
-        return false;
-    }
+    if (closure->function->is_async) {
+        Coroutine *coroutine = malloc(sizeof(*coroutine));
+        coroutine->next = vm.coroutine->next;
+        coroutine->prev = vm.coroutine;
+        vm.coroutine->next->prev = coroutine;
+        vm.coroutine->next = coroutine;
 
-    CallFrame *frame = ++vm.frame;
-    frame->closure = closure;
-    frame->ip = closure->function->chunk.code;
-    frame->slots = vm.stack_top - arg_num - 1;
+        // Move arguments from callee's stack to the new coroutine.
+        vm.coroutine->stack_top -= arg_num + 1;
+        coroutine->stack_top = coroutine->stack + arg_num + 1;
+        memcpy(coroutine->stack, vm.coroutine->stack_top, sizeof(Value) * (arg_num + 1));
+
+        // Push promise to the callee's stack.
+        // TODO: Replace nil with promise
+        stack_push(VALUE_NIL());
+
+        init_callstack(coroutine, closure);
+        vm.coroutine = coroutine;
+    } else {
+        if (vm.coroutine->frame - vm.coroutine->frames + 1 == CALLSTACK_SIZE) {
+            runtime_error("Stack overflow");
+            return false;
+        }
+
+        CallFrame *frame = ++vm.coroutine->frame;
+        frame->closure = closure;
+        frame->ip = closure->function->chunk.code;
+        frame->slots = vm.coroutine->stack_top - arg_num - 1;
+    }
 
     return true;
 }
@@ -91,9 +119,9 @@ static bool call_native(ObjNative *native, uint8_t arg_num) {
     }
 
     Value return_value;
-    if (!native->function(&return_value, vm.stack_top - arg_num)) return false;
+    if (!native->function(&return_value, vm.coroutine->stack_top - arg_num)) return false;
 
-    vm.stack_top -= arg_num + 1;
+    vm.coroutine->stack_top -= arg_num + 1;
     stack_push(return_value);
     return true;
 }
@@ -106,7 +134,7 @@ static bool call_value(Value value, uint8_t arg_num) {
             case OBJ_CLASS:   {
                 ObjClass *class = (ObjClass *) value.as.object;
                 Value instance = VALUE_OBJECT(new_instance(class));
-                *(vm.stack_top - arg_num - 1) = instance;
+                *(vm.coroutine->stack_top - arg_num - 1) = instance;
 
                 Value init_value;
                 if (hashmap_get(&class->methods, vm.init_string, &init_value)) {
@@ -121,7 +149,7 @@ static bool call_value(Value value, uint8_t arg_num) {
             }
             case OBJ_BOUND_METHOD: {
                 ObjBoundMethod *bound_method = (ObjBoundMethod *) value.as.object;
-                *(vm.stack_top - arg_num - 1) = bound_method->instance;
+                *(vm.coroutine->stack_top - arg_num - 1) = bound_method->instance;
                 return call(bound_method->method, arg_num);
             }
             default: break;
@@ -163,9 +191,10 @@ static void close_upvalues(Value *value) {
 }
 
 static InterpretResult run(void) {
-#define READ_U8() (*vm.frame->ip++)
-#define READ_U16() (vm.frame->ip += 2, (uint16_t) (*(vm.frame->ip - 2) | (*(vm.frame->ip - 1) << 8)))
-#define READ_CONST() (vm.frame->closure->function->chunk.constants.values[READ_U8()])
+#define READ_U8() (*vm.coroutine->frame->ip++)
+#define READ_U16() \
+    (vm.coroutine->frame->ip += 2, (uint16_t) (*(vm.coroutine->frame->ip - 2) | (*(vm.coroutine->frame->ip - 1) << 8)))
+#define READ_CONST() (vm.coroutine->frame->closure->function->chunk.constants.values[READ_U8()])
 #define READ_STRING() ((ObjString *) READ_CONST().as.object)
 
 #define UNARY_OP(op)                                                                                     \
@@ -174,7 +203,7 @@ static InterpretResult run(void) {
             runtime_error("Operand must be a number but found '%s'", value_to_temp_cstr(stack_peek(0))); \
             return RESULT_RUNTIME_ERROR;                                                                 \
         }                                                                                                \
-        (vm.stack_top - 1)->as.number op;                                                                \
+        (vm.coroutine->stack_top - 1)->as.number op;                                                     \
         break;                                                                                           \
     } while (0)
 #define BINARY_OP(value_type, op)                                                                        \
@@ -195,7 +224,8 @@ static InterpretResult run(void) {
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         print_stack();
-        disassemble_instr(&vm.frame->closure->function->chunk, vm.frame->ip - vm.frame->closure->function->chunk.code);
+        disassemble_instr(&vm.coroutine->frame->closure->function->chunk,
+                          vm.coroutine->frame->ip - vm.coroutine->frame->closure->function->chunk.code);
 #endif
 
         uint8_t instruction = READ_U8();
@@ -255,10 +285,10 @@ static InterpretResult run(void) {
                     return RESULT_RUNTIME_ERROR;
                 }
             } break;
-            case OP_GET_LOCAL:   stack_push(vm.frame->slots[READ_U8()]); break;
-            case OP_SET_LOCAL:   vm.frame->slots[READ_U8()] = stack_peek(0); break;
-            case OP_GET_UPVALUE: stack_push(*vm.frame->closure->upvalues[READ_U8()]->location); break;
-            case OP_SET_UPVALUE: *vm.frame->closure->upvalues[READ_U8()]->location = stack_peek(0); break;
+            case OP_GET_LOCAL:   stack_push(vm.coroutine->frame->slots[READ_U8()]); break;
+            case OP_SET_LOCAL:   vm.coroutine->frame->slots[READ_U8()] = stack_peek(0); break;
+            case OP_GET_UPVALUE: stack_push(*vm.coroutine->frame->closure->upvalues[READ_U8()]->location); break;
+            case OP_SET_UPVALUE: *vm.coroutine->frame->closure->upvalues[READ_U8()]->location = stack_peek(0); break;
             case OP_PRINT:       printf("%s\n", value_to_temp_cstr(stack_pop())); break;
             case OP_CONCAT:      {
                 uint8_t parts = READ_U8();
@@ -279,19 +309,19 @@ static InterpretResult run(void) {
             } break;
             case OP_JUMP: {
                 uint16_t offset = READ_U16();
-                vm.frame->ip += offset;
+                vm.coroutine->frame->ip += offset;
             } break;
             case OP_JUMP_IF_FALSE: {
                 uint16_t offset = READ_U16();
-                if (!value_is_truthy(stack_peek(0))) vm.frame->ip += offset;
+                if (!value_is_truthy(stack_peek(0))) vm.coroutine->frame->ip += offset;
             } break;
             case OP_JUMP_IF_TRUE: {
                 uint16_t offset = READ_U16();
-                if (value_is_truthy(stack_peek(0))) vm.frame->ip += offset;
+                if (value_is_truthy(stack_peek(0))) vm.coroutine->frame->ip += offset;
             } break;
             case OP_LOOP: {
                 uint16_t offset = READ_U16();
-                vm.frame->ip -= offset;
+                vm.coroutine->frame->ip -= offset;
             } break;
             case OP_CALL: {
                 uint8_t arg_num = READ_U8();
@@ -306,32 +336,41 @@ static InterpretResult run(void) {
                     uint8_t index = READ_U8();
 
                     if (is_local) {
-                        closure->upvalues[i] = capture_upvalue(&vm.frame->slots[index]);
+                        closure->upvalues[i] = capture_upvalue(&vm.coroutine->frame->slots[index]);
                     } else {
-                        closure->upvalues[i] = vm.frame->closure->upvalues[index];
+                        closure->upvalues[i] = vm.coroutine->frame->closure->upvalues[index];
                     }
                 }
             } break;
             case OP_CLOSE_UPVALUE:
-                close_upvalues(vm.stack_top - 1);
+                close_upvalues(vm.coroutine->stack_top - 1);
                 stack_pop();
                 break;
             case OP_RETURN: {
                 // Save return value.
                 Value return_value = stack_pop();
 
-                if (vm.frame == vm.frames) {
-                    // Initial callframe, pop script's closure and exit.
+                if (vm.coroutine->frame == vm.coroutine->frames) {
                     stack_pop();
-                    return RESULT_OK;
+
+                    // If it's the last callframe of the last coroutine, exit.
+                    if (vm.coroutine->next == vm.coroutine) return RESULT_OK;
+
+                    // Otherwise, remove and free the finished coroutine.
+                    Coroutine *finished_coroutine = vm.coroutine;
+                    vm.coroutine->prev->next = vm.coroutine->next;
+                    vm.coroutine->next->prev = vm.coroutine->prev;
+                    vm.coroutine = vm.coroutine->next;
+                    free(finished_coroutine);
+                    break;
                 }
 
                 // Close upvalues and pop local variables.
-                close_upvalues(vm.frame->slots);
-                vm.stack_top = vm.frame->slots;
+                close_upvalues(vm.coroutine->frame->slots);
+                vm.coroutine->stack_top = vm.coroutine->frame->slots;
 
                 // Pop frame.
-                vm.frame--;
+                vm.coroutine->frame--;
 
                 // Restore return value.
                 stack_push(return_value);
@@ -395,8 +434,8 @@ static InterpretResult run(void) {
                 ObjString *name = READ_STRING();
                 uint8_t arg_num = READ_U8();
 #ifdef INLINE_CACHING
-                uint8_t *cache_ip = vm.frame->ip;
-                vm.frame->ip += sizeof(cache_id_t) + sizeof(void *);
+                uint8_t *cache_ip = vm.coroutine->frame->ip;
+                vm.coroutine->frame->ip += sizeof(cache_id_t) + sizeof(void *);
 #endif
 
                 Value instance_value = stack_peek(arg_num);
@@ -408,7 +447,7 @@ static InterpretResult run(void) {
 
                 Value value;
                 if (hashmap_get(&instance->fields, name, &value)) {
-                    *(vm.stack_top - arg_num - 1) = value;
+                    *(vm.coroutine->stack_top - arg_num - 1) = value;
                     if (!call_value(value, arg_num)) return RESULT_RUNTIME_ERROR;
                     break;
                 }
@@ -456,8 +495,8 @@ static InterpretResult run(void) {
                 ObjClass *superclass = (ObjClass *) stack_pop().as.object;
 
 #ifdef INLINE_CACHING
-                uint8_t *cache_ip = vm.frame->ip;
-                vm.frame->ip += sizeof(void *);
+                uint8_t *cache_ip = vm.coroutine->frame->ip;
+                vm.coroutine->frame->ip += sizeof(void *);
 
                 ObjClosure *cached_method;
                 memcpy(&cached_method, cache_ip, sizeof(cached_method));
@@ -479,7 +518,8 @@ static InterpretResult run(void) {
                 runtime_error("Undefined superclass method '%s'", name->cstr);
                 return RESULT_RUNTIME_ERROR;
             } break;
-            default: UNREACHABLE();
+            case OP_YIELD: vm.coroutine = vm.coroutine->next; break;
+            default:       UNREACHABLE();
         }
     }
 
@@ -492,7 +532,14 @@ static InterpretResult run(void) {
 }
 
 void init_vm(void) {
-    vm.stack_top = vm.stack;
+    Coroutine *script = malloc(sizeof(*script));
+    script->next = script;
+    script->prev = script;
+    // Must be null until the script create initial callframe to prevent GC from accessing it.
+    script->frame = NULL;
+    script->stack_top = script->stack;
+    vm.coroutine = script;
+
     vm.next_gc = GC_INITIAL_THRESHOLD;
 
     vm.init_string = copy_string("init", 4);
@@ -508,6 +555,8 @@ void init_vm(void) {
 }
 
 void free_vm(void) {
+    free(vm.coroutine);
+    free(vm.grey_objects);
     free_hashmap(&vm.strings);
     free_hashmap(&vm.globals);
 
@@ -517,7 +566,6 @@ void free_vm(void) {
         free_object(current);
         current = next;
     }
-    free(vm.grey_objects);
 }
 
 InterpretResult interpret(const char *source) {
@@ -527,13 +575,9 @@ InterpretResult interpret(const char *source) {
     stack_push(VALUE_OBJECT(script));
     ObjClosure *closure = new_closure(script);
     stack_pop();
-    stack_push(VALUE_OBJECT(closure));
 
-    // Create initial callframe.
-    CallFrame *frame = vm.frame = vm.frames;
-    frame->closure = closure;
-    frame->ip = closure->function->chunk.code;
-    frame->slots = vm.stack_top - 1;
+    stack_push(VALUE_OBJECT(closure));
+    init_callstack(vm.coroutine, closure);
 
     return run();
 }

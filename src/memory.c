@@ -53,13 +53,18 @@ static void mark_roots(void) {
     mark_object((Object *) vm.init_string);
     hashmap_mark_entries(&vm.globals);
 
-    for (Value *value = vm.stack; value < vm.stack_top; value++) {
-        mark_value(value);
-    }
+    Coroutine *current = vm.coroutine;
+    do {
+        for (Value *value = current->stack; value < current->stack_top; value++) {
+            mark_value(value);
+        }
 
-    for (CallFrame *frame = vm.frames; frame <= vm.frame; frame++) {
-        mark_object((Object *) frame->closure);
-    }
+        for (CallFrame *frame = current->frames; frame <= current->frame; frame++) {
+            mark_object((Object *) frame->closure);
+        }
+
+        current = current->next;
+    } while (current != vm.coroutine);
 
     for (ObjUpvalue *upvalue = vm.open_upvalues; upvalue != NULL; upvalue = upvalue->next) {
         mark_object((Object *) upvalue);

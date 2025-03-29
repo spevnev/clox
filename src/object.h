@@ -35,6 +35,7 @@ typedef struct ObjString {
 typedef struct {
     Object object;
     ObjString *name;
+    bool is_async;
     uint8_t arity;
     uint32_t upvalues_count;
     Chunk chunk;
@@ -92,7 +93,7 @@ cache_id_t next_id(void);
 
 const char *object_to_temp_cstr(const Object *object);
 void free_object(Object *object);
-ObjFunction *new_function(ObjString *name);
+ObjFunction *new_function(ObjString *name, bool is_async);
 ObjUpvalue *new_upvalue(Value *value);
 ObjClosure *new_closure(ObjFunction *function);
 ObjNative *new_native(NativeDefinition def);

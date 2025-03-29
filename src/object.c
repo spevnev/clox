@@ -85,9 +85,10 @@ static Object *new_object(ObjectType type, uint32_t size) {
     return object;
 }
 
-ObjFunction *new_function(ObjString *name) {
+ObjFunction *new_function(ObjString *name, bool is_async) {
     ObjFunction *function = (ObjFunction *) new_object(OBJ_FUNCTION, sizeof(ObjFunction));
     function->name = name;
+    function->is_async = is_async;
     function->arity = 0;
     function->upvalues_count = 0;
     function->chunk = (Chunk) {0};

@@ -104,7 +104,8 @@ uint32_t disassemble_instr(const Chunk *chunk, uint32_t offset) {
             offset += sizeof(void *);
 #endif
         } break;
-        default: printf("unknown opcode %d\n", opcode); break;
+        case OP_YIELD: INSTR("yield"); break;
+        default:       printf("unknown opcode %d\n", opcode); break;
     }
     return offset;
 

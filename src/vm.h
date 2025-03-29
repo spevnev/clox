@@ -22,11 +22,17 @@ typedef struct {
     Value *slots;
 } CallFrame;
 
-typedef struct {
+typedef struct Coroutine {
+    struct Coroutine *prev;
+    struct Coroutine *next;
     CallFrame *frame;
     CallFrame frames[CALLSTACK_SIZE];
     Value *stack_top;
     Value stack[STACK_SIZE];
+} Coroutine;
+
+typedef struct {
+    Coroutine *coroutine;
     HashMap strings;  // Set of interned strings (values are always null).
     HashMap globals;
     ObjUpvalue *open_upvalues;
