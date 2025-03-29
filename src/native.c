@@ -6,12 +6,12 @@
 #include "value.h"
 #include "vm.h"
 
-static bool clock_fun(Value* result, UNUSED(Value* args)) {
+static bool clock_fun(Value *result, UNUSED(Value *args)) {
     *result = VALUE_NUMBER((double) clock() / CLOCKS_PER_SEC);
     return true;
 }
 
-static bool has_field(Value* result, Value* args) {
+static bool has_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
         runtime_error("The first argument of hasField must be an instance");
         return false;
@@ -21,8 +21,8 @@ static bool has_field(Value* result, Value* args) {
         return false;
     }
 
-    ObjInstance* instance = (ObjInstance*) args[0].as.object;
-    ObjString* field = (ObjString*) args[1].as.object;
+    ObjInstance *instance = (ObjInstance *) args[0].as.object;
+    ObjString *field = (ObjString *) args[1].as.object;
 
     Value unused;
     bool has_field = hashmap_get(&instance->fields, field, &unused);
@@ -30,7 +30,7 @@ static bool has_field(Value* result, Value* args) {
     return true;
 }
 
-static bool get_field(Value* result, Value* args) {
+static bool get_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
         runtime_error("The first argument of getField must be an instance");
         return false;
@@ -40,8 +40,8 @@ static bool get_field(Value* result, Value* args) {
         return false;
     }
 
-    ObjInstance* instance = (ObjInstance*) args[0].as.object;
-    ObjString* field = (ObjString*) args[1].as.object;
+    ObjInstance *instance = (ObjInstance *) args[0].as.object;
+    ObjString *field = (ObjString *) args[1].as.object;
 
     if (!hashmap_get(&instance->fields, field, result)) {
         runtime_error("Undefined field '%s'", field->cstr);
@@ -50,7 +50,7 @@ static bool get_field(Value* result, Value* args) {
     return true;
 }
 
-static bool set_field(Value* result, Value* args) {
+static bool set_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
         runtime_error("The first argument of setField must be an instance");
         return false;
@@ -60,15 +60,15 @@ static bool set_field(Value* result, Value* args) {
         return false;
     }
 
-    ObjInstance* instance = (ObjInstance*) args[0].as.object;
-    ObjString* field = (ObjString*) args[1].as.object;
+    ObjInstance *instance = (ObjInstance *) args[0].as.object;
+    ObjString *field = (ObjString *) args[1].as.object;
 
     hashmap_set(&instance->fields, field, args[2]);
     *result = args[2];
     return true;
 }
 
-static bool delete_field(Value* result, Value* args) {
+static bool delete_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
         runtime_error("The first argument of deleteField must be an instance");
         return false;
@@ -78,8 +78,8 @@ static bool delete_field(Value* result, Value* args) {
         return false;
     }
 
-    ObjInstance* instance = (ObjInstance*) args[0].as.object;
-    ObjString* field = (ObjString*) args[1].as.object;
+    ObjInstance *instance = (ObjInstance *) args[0].as.object;
+    ObjString *field = (ObjString *) args[1].as.object;
 
     hashmap_delete(&instance->fields, field);
     *result = VALUE_NIL();

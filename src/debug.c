@@ -5,7 +5,7 @@
 #include "common.h"
 #include "value.h"
 
-uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
+uint32_t disassemble_instr(const Chunk *chunk, uint32_t offset) {
 #define READ_U8() (chunk->code[offset++])
 #define READ_U16() (offset += 2, (uint16_t) (chunk->code[offset - 2] | (chunk->code[offset - 1] << 8)))
 
@@ -77,7 +77,7 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_CLOSURE: {
             uint8_t constant = chunk->code[offset];
             CONST_INSTR("closure");
-            ObjFunction* function = (ObjFunction*) chunk->constants.values[constant].as.object;
+            ObjFunction *function = (ObjFunction *) chunk->constants.values[constant].as.object;
             for (uint32_t i = 0; i < function->upvalues_count; i++) {
                 uint8_t is_local = READ_U8();
                 uint8_t index = READ_U8();
@@ -94,14 +94,14 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
         case OP_INVOKE:        {
             INVOKE_INSTR("invoke");
 #ifdef INLINE_CACHING
-            offset += sizeof(cache_id_t) + sizeof(void*);
+            offset += sizeof(cache_id_t) + sizeof(void *);
 #endif
         } break;
         case OP_GET_SUPER:    CONST_INSTR("get super"); break;
         case OP_SUPER_INVOKE: {
             INVOKE_INSTR("super invoke");
 #ifdef INLINE_CACHING
-            offset += sizeof(void*);
+            offset += sizeof(void *);
 #endif
         } break;
         default: printf("unknown opcode %d\n", opcode); break;
@@ -117,10 +117,10 @@ uint32_t disassemble_instr(const Chunk* chunk, uint32_t offset) {
 #undef INVOKE_INSTR
 }
 
-static const char* HEADER = "line | offset  instruction";
+static const char *HEADER = "line | offset  instruction";
 static const int HEADER_LEN = 40;
 
-void disassemble_chunk(const Chunk* chunk, const char* name) {
+void disassemble_chunk(const Chunk *chunk, const char *name) {
     float padding = (HEADER_LEN - strlen(name) - 2) / 2.0;
     for (int i = 0; i < ceilf(padding); i++) printf("-");
     printf(" %s ", name);

@@ -17,3 +17,5 @@ InsertNewlineAtEOF: true
 AllowShortCaseLabelsOnASingleLine: true
 AlignConsecutiveShortCaseStatements:
   Enabled: true
+DerivePointerAlignment: false
+PointerAlignment: Right

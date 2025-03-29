@@ -16,7 +16,7 @@ VM vm = {0};
 #ifdef DEBUG_TRACE_EXECUTION
 static void print_stack(void) {
     printf("Stack: ");
-    for (const Value* value = vm.stack; value < vm.stack_top; value++) {
+    for (const Value *value = vm.stack; value < vm.stack_top; value++) {
         if (value != vm.stack) printf(", ");
         printf("%s", value_to_temp_cstr(*value));
     }
@@ -27,16 +27,16 @@ static void print_stack(void) {
 static void print_stacktrace(void) {
 #ifndef HIDE_STACKTRACE
     fprintf(stderr, "Stacktrace:\n");
-    for (CallFrame* frame = vm.frame; frame >= vm.frames; frame--) {
-        ObjFunction* function = frame->closure->function;
+    for (CallFrame *frame = vm.frame; frame >= vm.frames; frame--) {
+        ObjFunction *function = frame->closure->function;
         Loc loc = function->chunk.locs[frame->ip - function->chunk.code - 1];
         fprintf(stderr, "    '%s' at %u:%u\n", function->name->cstr, loc.line, loc.column);
     }
 #endif
 }
 
-void runtime_error(const char* fmt, ...) {
-    Chunk* chunk = &vm.frame->closure->function->chunk;
+void runtime_error(const char *fmt, ...) {
+    Chunk *chunk = &vm.frame->closure->function->chunk;
     va_list args;
     va_start(args, fmt);
     error_varg(chunk->locs[vm.frame->ip - chunk->code - 1], fmt, args);
@@ -64,7 +64,7 @@ Value stack_peek(uint32_t distance) {
     return *(vm.stack_top - distance - 1);
 }
 
-static bool call(ObjClosure* closure, uint8_t arg_num) {
+static bool call(ObjClosure *closure, uint8_t arg_num) {
     if (arg_num != closure->function->arity) {
         runtime_error("Function '%s' expected %d arguments but got %d", closure->function->name->cstr,
                       closure->function->arity, arg_num);
@@ -76,7 +76,7 @@ static bool call(ObjClosure* closure, uint8_t arg_num) {
         return false;
     }
 
-    CallFrame* frame = ++vm.frame;
+    CallFrame *frame = ++vm.frame;
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
     frame->slots = vm.stack_top - arg_num - 1;
@@ -84,7 +84,7 @@ static bool call(ObjClosure* closure, uint8_t arg_num) {
     return true;
 }
 
-static bool call_native(ObjNative* native, uint8_t arg_num) {
+static bool call_native(ObjNative *native, uint8_t arg_num) {
     if (arg_num != native->arity) {
         runtime_error("Function '%s' expected %d arguments but got %d", native->name, native->arity, arg_num);
         return false;
@@ -101,16 +101,16 @@ static bool call_native(ObjNative* native, uint8_t arg_num) {
 static bool call_value(Value value, uint8_t arg_num) {
     if (value.type == VAL_OBJECT) {
         switch (value.as.object->type) {
-            case OBJ_CLOSURE: return call((ObjClosure*) value.as.object, arg_num);
-            case OBJ_NATIVE:  return call_native((ObjNative*) value.as.object, arg_num);
+            case OBJ_CLOSURE: return call((ObjClosure *) value.as.object, arg_num);
+            case OBJ_NATIVE:  return call_native((ObjNative *) value.as.object, arg_num);
             case OBJ_CLASS:   {
-                ObjClass* class = (ObjClass*) value.as.object;
+                ObjClass *class = (ObjClass *) value.as.object;
                 Value instance = VALUE_OBJECT(new_instance(class));
                 *(vm.stack_top - arg_num - 1) = instance;
 
                 Value init_value;
                 if (hashmap_get(&class->methods, vm.init_string, &init_value)) {
-                    return call((ObjClosure*) init_value.as.object, arg_num);
+                    return call((ObjClosure *) init_value.as.object, arg_num);
                 } else if (arg_num != 0) {
                     runtime_error("Class '%s' has no initializer, expected 0 arguments but got %d", class->name->cstr,
                                   arg_num);
@@ -120,7 +120,7 @@ static bool call_value(Value value, uint8_t arg_num) {
                 return true;
             }
             case OBJ_BOUND_METHOD: {
-                ObjBoundMethod* bound_method = (ObjBoundMethod*) value.as.object;
+                ObjBoundMethod *bound_method = (ObjBoundMethod *) value.as.object;
                 *(vm.stack_top - arg_num - 1) = bound_method->instance;
                 return call(bound_method->method, arg_num);
             }
@@ -132,7 +132,7 @@ static bool call_value(Value value, uint8_t arg_num) {
     return false;
 }
 
-static ObjUpvalue* capture_upvalue(Value* value) {
+static ObjUpvalue *capture_upvalue(Value *value) {
     ObjUpvalue *prev = NULL, *current = vm.open_upvalues;
     while (current != NULL && current->location > value) {
         prev = current;
@@ -141,7 +141,7 @@ static ObjUpvalue* capture_upvalue(Value* value) {
 
     if (current != NULL && current->location == value) return current;
 
-    ObjUpvalue* new = new_upvalue(value);
+    ObjUpvalue *new = new_upvalue(value);
     new->next = current;
     if (prev == NULL) {
         vm.open_upvalues = new;
@@ -152,8 +152,8 @@ static ObjUpvalue* capture_upvalue(Value* value) {
     return new;
 }
 
-static void close_upvalues(Value* value) {
-    ObjUpvalue* current = vm.open_upvalues;
+static void close_upvalues(Value *value) {
+    ObjUpvalue *current = vm.open_upvalues;
     while (current != NULL && current->location >= value) {
         current->closed = *current->location;
         current->location = &current->closed;
@@ -166,7 +166,7 @@ static InterpretResult run(void) {
 #define READ_U8() (*vm.frame->ip++)
 #define READ_U16() (vm.frame->ip += 2, (uint16_t) (*(vm.frame->ip - 2) | (*(vm.frame->ip - 1) << 8)))
 #define READ_CONST() (vm.frame->closure->function->chunk.constants.values[READ_U8()])
-#define READ_STRING() ((ObjString*) READ_CONST().as.object)
+#define READ_STRING() ((ObjString *) READ_CONST().as.object)
 
 #define UNARY_OP(op)                                                                                     \
     do {                                                                                                 \
@@ -212,8 +212,8 @@ static InterpretResult run(void) {
             case OP_LESS:     BINARY_OP(VALUE_BOOL, <); break;
             case OP_ADD:
                 if (is_object_type(stack_peek(0), OBJ_STRING) && is_object_type(stack_peek(1), OBJ_STRING)) {
-                    const ObjString* b = (ObjString*) stack_pop().as.object;
-                    const ObjString* a = (ObjString*) stack_pop().as.object;
+                    const ObjString *b = (ObjString *) stack_pop().as.object;
+                    const ObjString *a = (ObjString *) stack_pop().as.object;
                     stack_push(VALUE_OBJECT(concat_strings(a, b)));
                 } else if (stack_peek(0).type == VAL_NUMBER && stack_peek(1).type == VAL_NUMBER) {
                     stack_push(VALUE_NUMBER(stack_pop().as.number + stack_pop().as.number));
@@ -233,12 +233,12 @@ static InterpretResult run(void) {
             case OP_INCR:          UNARY_OP(++); break;
             case OP_DECR:          UNARY_OP(--); break;
             case OP_DEFINE_GLOBAL: {
-                ObjString* name = READ_STRING();
+                ObjString *name = READ_STRING();
                 hashmap_set(&vm.globals, name, stack_peek(0));
                 stack_pop();
             } break;
             case OP_GET_GLOBAL: {
-                ObjString* name = READ_STRING();
+                ObjString *name = READ_STRING();
                 Value value;
                 if (!hashmap_get(&vm.globals, name, &value)) {
                     runtime_error("Undefined variable '%s'", name->cstr);
@@ -247,7 +247,7 @@ static InterpretResult run(void) {
                 stack_push(value);
             } break;
             case OP_SET_GLOBAL: {
-                ObjString* name = READ_STRING();
+                ObjString *name = READ_STRING();
                 // Set doesn't pop since assignment expression should evaluate to the RHS.
                 if (hashmap_set(&vm.globals, name, stack_peek(0))) {
                     hashmap_delete(&vm.globals, name);
@@ -265,10 +265,10 @@ static InterpretResult run(void) {
                 uint32_t length = 0;
                 for (uint8_t i = 0; i < parts; i++) length += strlen(value_to_temp_cstr(stack_peek(i)));
 
-                ObjString* string = create_new_string(length);
-                char* current = string->cstr;
+                ObjString *string = create_new_string(length);
+                char *current = string->cstr;
                 for (int i = parts - 1; i >= 0; i--) {
-                    const char* part = value_to_temp_cstr(stack_peek(i));
+                    const char *part = value_to_temp_cstr(stack_peek(i));
                     uint32_t length = strlen(part);
 
                     memcpy(current, part, length);
@@ -298,7 +298,7 @@ static InterpretResult run(void) {
                 if (!call_value(stack_peek(arg_num), arg_num)) return RESULT_RUNTIME_ERROR;
             } break;
             case OP_CLOSURE: {
-                ObjClosure* closure = new_closure((ObjFunction*) READ_CONST().as.object);
+                ObjClosure *closure = new_closure((ObjFunction *) READ_CONST().as.object);
                 stack_push(VALUE_OBJECT(closure));
 
                 for (uint32_t i = 0; i < closure->upvalues_length; i++) {
@@ -338,7 +338,7 @@ static InterpretResult run(void) {
             } break;
             case OP_CLASS:  stack_push(VALUE_OBJECT(new_class(READ_STRING()))); break;
             case OP_METHOD: {
-                ObjClass* class = (ObjClass*) stack_peek(1).as.object;
+                ObjClass *class = (ObjClass *) stack_peek(1).as.object;
                 hashmap_set(&class->methods, READ_STRING(), stack_peek(0));
                 stack_pop();
             } break;
@@ -348,8 +348,8 @@ static InterpretResult run(void) {
                     runtime_error("Superclass must be a class but found '%s'", value_to_temp_cstr(superclass_value));
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjClass* superclass = (ObjClass*) superclass_value.as.object;
-                ObjClass* subclass = (ObjClass*) stack_peek(0).as.object;
+                ObjClass *superclass = (ObjClass *) superclass_value.as.object;
+                ObjClass *subclass = (ObjClass *) stack_peek(0).as.object;
                 hashmap_set_all(&superclass->methods, &subclass->methods);
                 stack_pop();
             } break;
@@ -359,8 +359,8 @@ static InterpretResult run(void) {
                     runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
-                ObjString* field = READ_STRING();
+                ObjInstance *instance = (ObjInstance *) instance_value.as.object;
+                ObjString *field = READ_STRING();
 
                 Value value;
                 if (hashmap_get(&instance->fields, field, &value)) {
@@ -369,7 +369,7 @@ static InterpretResult run(void) {
                     break;
                 }
                 if (hashmap_get(&instance->class->methods, field, &value)) {
-                    ObjBoundMethod* bound_method = new_bound_method(instance_value, (ObjClosure*) value.as.object);
+                    ObjBoundMethod *bound_method = new_bound_method(instance_value, (ObjClosure *) value.as.object);
                     stack_pop();
                     stack_push(VALUE_OBJECT(bound_method));
                     break;
@@ -386,17 +386,17 @@ static InterpretResult run(void) {
                 }
 
                 Value value = stack_peek(0);
-                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
+                ObjInstance *instance = (ObjInstance *) instance_value.as.object;
                 hashmap_set(&instance->fields, READ_STRING(), value);
                 stack_popn(2);
                 stack_push(value);
             } break;
             case OP_INVOKE: {
-                ObjString* name = READ_STRING();
+                ObjString *name = READ_STRING();
                 uint8_t arg_num = READ_U8();
 #ifdef INLINE_CACHING
-                uint8_t* cache_ip = vm.frame->ip;
-                vm.frame->ip += sizeof(cache_id_t) + sizeof(void*);
+                uint8_t *cache_ip = vm.frame->ip;
+                vm.frame->ip += sizeof(cache_id_t) + sizeof(void *);
 #endif
 
                 Value instance_value = stack_peek(arg_num);
@@ -404,7 +404,7 @@ static InterpretResult run(void) {
                     runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjInstance* instance = (ObjInstance*) instance_value.as.object;
+                ObjInstance *instance = (ObjInstance *) instance_value.as.object;
 
                 Value value;
                 if (hashmap_get(&instance->fields, name, &value)) {
@@ -415,7 +415,7 @@ static InterpretResult run(void) {
 
 #ifdef INLINE_CACHING
                 if (memcmp(cache_ip, &instance->class->id, sizeof(cache_id_t)) == 0) {
-                    ObjClosure* cached_method;
+                    ObjClosure *cached_method;
                     memcpy(&cached_method, cache_ip + sizeof(cache_id_t), sizeof(cached_method));
                     assert(cached_method != NULL);
 
@@ -427,9 +427,9 @@ static InterpretResult run(void) {
                 if (hashmap_get(&instance->class->methods, name, &value)) {
 #ifdef INLINE_CACHING
                     memcpy(cache_ip, &instance->class->id, sizeof(cache_id_t));
-                    memcpy(cache_ip + sizeof(cache_id_t), &value.as.object, sizeof(void*));
+                    memcpy(cache_ip + sizeof(cache_id_t), &value.as.object, sizeof(void *));
 #endif
-                    if (!call((ObjClosure*) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
+                    if (!call((ObjClosure *) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
                     break;
                 }
 
@@ -437,8 +437,8 @@ static InterpretResult run(void) {
                 return RESULT_RUNTIME_ERROR;
             } break;
             case OP_GET_SUPER: {
-                ObjString* name = READ_STRING();
-                ObjClass* superclass = (ObjClass*) stack_pop().as.object;
+                ObjString *name = READ_STRING();
+                ObjClass *superclass = (ObjClass *) stack_pop().as.object;
 
                 Value value;
                 if (!hashmap_get(&superclass->methods, name, &value)) {
@@ -446,20 +446,20 @@ static InterpretResult run(void) {
                     return RESULT_RUNTIME_ERROR;
                 }
 
-                ObjBoundMethod* bound_method = new_bound_method(stack_peek(0), (ObjClosure*) value.as.object);
+                ObjBoundMethod *bound_method = new_bound_method(stack_peek(0), (ObjClosure *) value.as.object);
                 stack_pop();
                 stack_push(VALUE_OBJECT(bound_method));
             } break;
             case OP_SUPER_INVOKE: {
-                ObjString* name = READ_STRING();
+                ObjString *name = READ_STRING();
                 uint8_t arg_num = READ_U8();
-                ObjClass* superclass = (ObjClass*) stack_pop().as.object;
+                ObjClass *superclass = (ObjClass *) stack_pop().as.object;
 
 #ifdef INLINE_CACHING
-                uint8_t* cache_ip = vm.frame->ip;
-                vm.frame->ip += sizeof(void*);
+                uint8_t *cache_ip = vm.frame->ip;
+                vm.frame->ip += sizeof(void *);
 
-                ObjClosure* cached_method;
+                ObjClosure *cached_method;
                 memcpy(&cached_method, cache_ip, sizeof(cached_method));
                 if (cached_method != NULL) {
                     if (!call(cached_method, arg_num)) return RESULT_RUNTIME_ERROR;
@@ -470,9 +470,9 @@ static InterpretResult run(void) {
                 Value value;
                 if (hashmap_get(&superclass->methods, name, &value)) {
 #ifdef INLINE_CACHING
-                    memcpy(cache_ip, &value.as.object, sizeof(void*));
+                    memcpy(cache_ip, &value.as.object, sizeof(void *));
 #endif
-                    if (!call((ObjClosure*) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
+                    if (!call((ObjClosure *) value.as.object, arg_num)) return RESULT_RUNTIME_ERROR;
                     break;
                 }
 
@@ -498,7 +498,7 @@ void init_vm(void) {
     vm.init_string = copy_string("init", 4);
 
     for (size_t i = 0; i < native_defs_length(); i++) {
-        ObjString* name = copy_string(native_defs[i].name, strlen(native_defs[i].name));
+        ObjString *name = copy_string(native_defs[i].name, strlen(native_defs[i].name));
         stack_push(VALUE_OBJECT(name));
         Value native = VALUE_OBJECT(new_native(native_defs[i]));
         stack_push(native);
@@ -511,26 +511,26 @@ void free_vm(void) {
     free_hashmap(&vm.strings);
     free_hashmap(&vm.globals);
 
-    Object* current = vm.objects;
+    Object *current = vm.objects;
     while (current != NULL) {
-        Object* next = current->next;
+        Object *next = current->next;
         free_object(current);
         current = next;
     }
     free(vm.grey_objects);
 }
 
-InterpretResult interpret(const char* source) {
-    ObjFunction* script = compile(source);
+InterpretResult interpret(const char *source) {
+    ObjFunction *script = compile(source);
     if (script == NULL) return RESULT_COMPILE_ERROR;
 
     stack_push(VALUE_OBJECT(script));
-    ObjClosure* closure = new_closure(script);
+    ObjClosure *closure = new_closure(script);
     stack_pop();
     stack_push(VALUE_OBJECT(closure));
 
     // Create initial callframe.
-    CallFrame* frame = vm.frame = vm.frames;
+    CallFrame *frame = vm.frame = vm.frames;
     frame->closure = closure;
     frame->ip = closure->function->chunk.code;
     frame->slots = vm.stack_top - 1;
