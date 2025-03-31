@@ -549,11 +549,7 @@ void init_vm(void) {
     vm.next_gc = GC_INITIAL_THRESHOLD;
     vm.init_string = copy_string("init", 4);
 
-    for (size_t i = 0; i < native_defs_length(); i++) {
-        ObjString *name = copy_string(native_defs[i].name, strlen(native_defs[i].name));
-        Value native = VALUE_OBJECT(new_native(native_defs[i]));
-        hashmap_set(&vm.globals, name, native);
-    }
+    create_native_functions();
 }
 
 void free_vm(void) {

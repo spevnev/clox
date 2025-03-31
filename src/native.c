@@ -1,4 +1,5 @@
 #include "native.h"
+#include <string.h>
 #include <time.h>
 #include "common.h"
 #include "error.h"
@@ -6,18 +7,18 @@
 #include "value.h"
 #include "vm.h"
 
-static bool clock_fun(Value *result, UNUSED(Value *args)) {
+static bool clock_(Value *result, UNUSED(Value *args)) {
     *result = VALUE_NUMBER((double) clock() / CLOCKS_PER_SEC);
     return true;
 }
 
 static bool has_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
-        runtime_error("The first argument of hasField must be an instance");
+        runtime_error("The first argument must be an instance");
         return false;
     }
     if (!is_object_type(args[1], OBJ_STRING)) {
-        runtime_error("The second argument of hasField must be a string");
+        runtime_error("The second argument must be a string");
         return false;
     }
 
@@ -32,11 +33,11 @@ static bool has_field(Value *result, Value *args) {
 
 static bool get_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
-        runtime_error("The first argument of getField must be an instance");
+        runtime_error("The first argument must be an instance");
         return false;
     }
     if (!is_object_type(args[1], OBJ_STRING)) {
-        runtime_error("The second argument of getField must be a string");
+        runtime_error("The second argument must be a string");
         return false;
     }
 
@@ -52,11 +53,11 @@ static bool get_field(Value *result, Value *args) {
 
 static bool set_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
-        runtime_error("The first argument of setField must be an instance");
+        runtime_error("The first argument must be an instance");
         return false;
     }
     if (!is_object_type(args[1], OBJ_STRING)) {
-        runtime_error("The second argument of setField must be a string");
+        runtime_error("The second argument must be a string");
         return false;
     }
 
@@ -70,11 +71,11 @@ static bool set_field(Value *result, Value *args) {
 
 static bool delete_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
-        runtime_error("The first argument of deleteField must be an instance");
+        runtime_error("The first argument must be an instance");
         return false;
     }
     if (!is_object_type(args[1], OBJ_STRING)) {
-        runtime_error("The second argument of deleteField must be a string");
+        runtime_error("The second argument must be a string");
         return false;
     }
 
@@ -86,15 +87,22 @@ static bool delete_field(Value *result, Value *args) {
     return true;
 }
 
-NativeDefinition native_defs[] = {
+static NativeFunctionDef functions[] = {
     // clang-format off
     // name,         arity, function
-    { "clock",       0,     clock_fun    },
-    { "hasField",    2,     has_field    },
-    { "getField",    2,     get_field    },
-    { "setField",    3,     set_field    },
-    { "deleteField", 2,     delete_field },
+    { "clock",        0,    clock_           },
+
+    { "hasField",     2,    has_field        },
+    { "getField",     2,    get_field        },
+    { "setField",     3,    set_field        },
+    { "deleteField",  2,    delete_field     },
     // clang-format on
 };
 
-size_t native_defs_length(void) { return sizeof(native_defs) / sizeof(NativeDefinition); }
+void create_native_functions(void) {
+    for (size_t i = 0; i < sizeof(functions) / sizeof(*functions); i++) {
+        ObjString *name = copy_string(functions[i].name, strlen(functions[i].name));
+        Value function = VALUE_OBJECT(new_native(functions[i]));
+        hashmap_set(&vm.globals, name, function);
+    }
+}

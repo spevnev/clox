@@ -111,11 +111,11 @@ ObjClosure *new_closure(ObjFunction *function) {
     return closure;
 }
 
-ObjNative *new_native(NativeDefinition def) {
+ObjNative *new_native(NativeFunctionDef definition) {
     ObjNative *native = (ObjNative *) new_object(OBJ_NATIVE, sizeof(ObjNative));
-    native->name = def.name;
-    native->arity = def.arity;
-    native->function = def.function;
+    native->name = definition.name;
+    native->arity = definition.arity;
+    native->function = definition.function;
     return native;
 }
 

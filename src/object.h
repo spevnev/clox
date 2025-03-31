@@ -59,7 +59,7 @@ typedef struct {
     Object object;
     const char *name;
     uint8_t arity;
-    NativeFun function;
+    NativeFn function;
 } ObjNative;
 
 typedef struct {
@@ -96,7 +96,7 @@ void free_object(Object *object);
 ObjFunction *new_function(ObjString *name, bool is_async);
 ObjUpvalue *new_upvalue(Value *value);
 ObjClosure *new_closure(ObjFunction *function);
-ObjNative *new_native(NativeDefinition def);
+ObjNative *new_native(NativeFunctionDef definition);
 ObjClass *new_class(ObjString *name);
 ObjInstance *new_instance(ObjClass *class);
 ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method);

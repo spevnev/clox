@@ -3,15 +3,15 @@
 
 #include "value.h"
 
-typedef bool (*NativeFun)(Value *result, Value *args);
+typedef bool (*NativeFn)(Value *result, Value *args);
 
 typedef struct {
     const char *name;
     uint8_t arity;
-    NativeFun function;
-} NativeDefinition;
+    NativeFn function;
+} NativeFunctionDef;
 
-extern NativeDefinition native_defs[];
-size_t native_defs_length(void);
+// Creates native functions and adds to VM's globals.
+void create_native_functions(void);
 
 #endif  // CLOX_NATIVE_H_
