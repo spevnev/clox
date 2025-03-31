@@ -47,34 +47,34 @@ void free_object(Object *object) {
 #endif
 
     switch (object->type) {
-        case OBJ_STRING: reallocate(object, sizeof(ObjString) + ((ObjString *) object)->length + 1, 0); break;
+        case OBJ_STRING: FREE(object, sizeof(ObjString) + ((ObjString *) object)->length + 1); break;
         case OBJ_FUNCTION:
             free_chunk(&((ObjFunction *) object)->chunk);
-            reallocate(object, sizeof(ObjFunction), 0);
+            FREE(object, sizeof(ObjFunction));
             break;
-        case OBJ_UPVALUE: reallocate(object, sizeof(ObjUpvalue), 0); break;
+        case OBJ_UPVALUE: FREE(object, sizeof(ObjUpvalue)); break;
         case OBJ_CLOSURE: {
             ObjClosure *closure = (ObjClosure *) object;
-            reallocate(object, sizeof(ObjClosure) + sizeof(*closure->upvalues) * closure->upvalues_length, 0);
+            FREE(object, sizeof(ObjClosure) + sizeof(*closure->upvalues) * closure->upvalues_length);
         } break;
-        case OBJ_NATIVE: reallocate(object, sizeof(ObjNative), 0); break;
+        case OBJ_NATIVE: FREE(object, sizeof(ObjNative)); break;
         case OBJ_CLASS:  {
             ObjClass *class = (ObjClass *) object;
             free_hashmap(&class->methods);
-            reallocate(object, sizeof(ObjClass), 0);
+            FREE(object, sizeof(ObjClass));
         } break;
         case OBJ_INSTANCE: {
             ObjInstance *instance = (ObjInstance *) object;
             free_hashmap(&instance->fields);
-            reallocate(object, sizeof(ObjInstance), 0);
+            FREE(object, sizeof(ObjInstance));
         } break;
-        case OBJ_BOUND_METHOD: reallocate(object, sizeof(ObjBoundMethod), 0); break;
+        case OBJ_BOUND_METHOD: FREE(object, sizeof(ObjBoundMethod)); break;
         default:               UNREACHABLE();
     }
 }
 
 static Object *new_object(ObjectType type, uint32_t size) {
-    Object *object = reallocate(NULL, 0, size);
+    Object *object = ALLOC(size);
     object->is_marked = false;
     object->type = type;
     object->next = vm.objects;

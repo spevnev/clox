@@ -49,7 +49,7 @@ void mark_value(Value *value) {
     if (value->type == VAL_OBJECT) mark_object(value->as.object);
 }
 
-static void mark_roots(void) {
+static void mark_vm_roots(void) {
     mark_object((Object *) vm.init_string);
     hashmap_mark_entries(&vm.globals);
 
@@ -146,13 +146,15 @@ static void sweep(void) {
 }
 
 void collect_garbage(void) {
+    if (!vm.enable_gc) return;
+
 #ifdef DEBUG_LOG_GC
     printf("--- gc begin\n");
     size_t before = vm.allocated;
 #endif
 
     mark_compiler_roots();
-    mark_roots();
+    mark_vm_roots();
 
     while (vm.grey_length > 0) {
         Object *object = vm.grey_objects[--vm.grey_length];

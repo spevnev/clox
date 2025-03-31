@@ -22,6 +22,7 @@ typedef struct {
     Value *slots;
 } CallFrame;
 
+// TODO: Reduce size
 typedef struct Coroutine {
     struct Coroutine *prev;
     struct Coroutine *next;
@@ -38,6 +39,7 @@ typedef struct {
     ObjUpvalue *open_upvalues;
     ObjString *init_string;
     // GC
+    bool enable_gc;  // Disabled while initializing VM.
     Object *objects;
     uint32_t grey_capacity;
     uint32_t grey_length;

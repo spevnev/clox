@@ -64,6 +64,15 @@ Value stack_peek(uint32_t distance) {
     return *(vm.coroutine->stack_top - distance - 1);
 }
 
+static Coroutine *new_coroutine(void) {
+    Coroutine *coroutine = malloc(sizeof(*coroutine));
+    coroutine->prev = NULL;
+    coroutine->next = NULL;
+    coroutine->frame = NULL;
+    coroutine->stack_top = coroutine->stack;
+    return coroutine;
+}
+
 // Creates the first callframe in the new coroutine.
 static void init_callstack(Coroutine *coroutine, ObjClosure *closure) {
     CallFrame *frame = coroutine->frame = coroutine->frames;
@@ -80,7 +89,8 @@ static bool call(ObjClosure *closure, uint8_t arg_num) {
     }
 
     if (closure->function->is_async) {
-        Coroutine *coroutine = malloc(sizeof(*coroutine));
+        Coroutine *coroutine = new_coroutine();
+        init_callstack(coroutine, closure);
         coroutine->next = vm.coroutine->next;
         coroutine->prev = vm.coroutine;
         vm.coroutine->next->prev = coroutine;
@@ -89,13 +99,12 @@ static bool call(ObjClosure *closure, uint8_t arg_num) {
         // Move arguments from callee's stack to the new coroutine.
         vm.coroutine->stack_top -= arg_num + 1;
         coroutine->stack_top = coroutine->stack + arg_num + 1;
-        memcpy(coroutine->stack, vm.coroutine->stack_top, sizeof(Value) * (arg_num + 1));
+        memcpy(coroutine->stack, vm.coroutine->stack_top, sizeof(*coroutine->stack) * (arg_num + 1));
 
         // Push promise to the callee's stack.
         // TODO: Replace nil with promise
         stack_push(VALUE_NIL());
 
-        init_callstack(coroutine, closure);
         vm.coroutine = coroutine;
     } else {
         if (vm.coroutine->frame - vm.coroutine->frames + 1 == CALLSTACK_SIZE) {
@@ -224,8 +233,8 @@ static InterpretResult run(void) {
     for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
         print_stack();
-        disassemble_instr(&vm.coroutine->frame->closure->function->chunk,
-                          vm.coroutine->frame->ip - vm.coroutine->frame->closure->function->chunk.code);
+        const Chunk *chunk = &vm.coroutine->frame->closure->function->chunk;
+        disassemble_instr(chunk, vm.coroutine->frame->ip - chunk->code);
 #endif
 
         uint8_t instruction = READ_U8();
@@ -356,7 +365,7 @@ static InterpretResult run(void) {
                     // If it's the last callframe of the last coroutine, exit.
                     if (vm.coroutine->next == vm.coroutine) return RESULT_OK;
 
-                    // Otherwise, remove and free the finished coroutine.
+                    // Otherwise, remove the finished coroutine and schedule the next one.
                     Coroutine *finished_coroutine = vm.coroutine;
                     vm.coroutine->prev->next = vm.coroutine->next;
                     vm.coroutine->next->prev = vm.coroutine->prev;
@@ -532,25 +541,18 @@ static InterpretResult run(void) {
 }
 
 void init_vm(void) {
-    Coroutine *script = malloc(sizeof(*script));
-    script->next = script;
-    script->prev = script;
-    // Must be null until the script create initial callframe to prevent GC from accessing it.
-    script->frame = NULL;
-    script->stack_top = script->stack;
-    vm.coroutine = script;
+    Coroutine *coroutine = new_coroutine();
+    coroutine->next = coroutine;
+    coroutine->prev = coroutine;
 
+    vm.coroutine = coroutine;
     vm.next_gc = GC_INITIAL_THRESHOLD;
-
     vm.init_string = copy_string("init", 4);
 
     for (size_t i = 0; i < native_defs_length(); i++) {
         ObjString *name = copy_string(native_defs[i].name, strlen(native_defs[i].name));
-        stack_push(VALUE_OBJECT(name));
         Value native = VALUE_OBJECT(new_native(native_defs[i]));
-        stack_push(native);
         hashmap_set(&vm.globals, name, native);
-        stack_popn(2);
     }
 }
 
@@ -572,12 +574,10 @@ InterpretResult interpret(const char *source) {
     ObjFunction *script = compile(source);
     if (script == NULL) return RESULT_COMPILE_ERROR;
 
-    stack_push(VALUE_OBJECT(script));
     ObjClosure *closure = new_closure(script);
-    stack_pop();
-
-    stack_push(VALUE_OBJECT(closure));
     init_callstack(vm.coroutine, closure);
+    stack_push(VALUE_OBJECT(closure));
 
+    vm.enable_gc = true;
     return run();
 }

@@ -28,7 +28,7 @@ static Entry *find_entry(Entry *entries, uint32_t capacity, const ObjString *key
 
 static void grow_map(HashMap *map) {
     uint32_t new_capacity = MAP_GROW_CAPACITY(map->capacity);
-    Entry *new_entries = reallocate(NULL, 0, sizeof(*new_entries) * new_capacity);
+    Entry *new_entries = ARRAY_ALLOC(new_entries, new_capacity);
 
     // Entries are initialized with zeroes, so value type of empty entry must be zero.
     static_assert(VAL_NIL == 0);
