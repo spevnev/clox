@@ -12,6 +12,6 @@ typedef struct {
 } NativeFunctionDef;
 
 // Creates native functions and adds to VM's globals.
-void create_native_functions(void);
+void add_native_functions(void);
 
 #endif  // CLOX_NATIVE_H_

@@ -541,6 +541,11 @@ static void template(UNUSED(bool can_assign)) {
     emit_byte2(OP_CONCAT, parts);
 }
 
+static void await(UNUSED(bool can_assign)) {
+    parse_precedence(PREC_UNARY);
+    emit_byte(OP_AWAIT);
+}
+
 static const ParseRule rules[TOKEN_COUNT] = {
     // clang-format off
     // token                   prefix,   infix,       precedence
@@ -554,6 +559,8 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_SUPER]          = { super,    NULL,        PREC_NONE        },
     [TOKEN_BANG]           = { unary,    NULL,        PREC_NONE        },
     [TOKEN_MINUS_MINUS]    = { unary,    NULL,        PREC_NONE        },
+    [TOKEN_TEMPLATE_START] = { template, NULL,        PREC_NONE        },
+    [TOKEN_AWAIT]          = { await,    NULL,        PREC_NONE        },
     [TOKEN_MINUS]          = { unary,    binary,      PREC_TERM        },
     [TOKEN_PLUS]           = { NULL,     binary,      PREC_TERM        },
     [TOKEN_SLASH]          = { NULL,     binary,      PREC_FACTOR      },
@@ -569,7 +576,6 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_QUESTION]       = { NULL,     conditional, PREC_CONDITIONAL },
     [TOKEN_LEFT_PAREN]     = { grouping, call,        PREC_CALL        },
     [TOKEN_DOT]            = { NULL,     dot,         PREC_CALL        },
-    [TOKEN_TEMPLATE_START] = { template, NULL,        PREC_NONE        },
     // clang-format on
 };
 
@@ -936,15 +942,8 @@ static void switch_stmt(void) {
 }
 
 static void yield_stmt(void) {
-    Loc loc = p.current.loc;
     advance();
     expect(TOKEN_SEMICOLON, "Expected ';' after yield");
-
-    if (c->function_type != FUN_ASYNC) {
-        error_at(loc, "Cannot yield outside of async function");
-        return;
-    }
-
     emit_byte(OP_YIELD);
 }
 
@@ -1011,7 +1010,7 @@ static void function(FunctionType type) {
         p.is_panicking = true;
     }
 
-    end_scope();
+    // Ending the compiler ends the scope too, so there's no `end_scope`.
     ObjFunction *function = end_compiler();
 
     emit_byte2(OP_CLOSURE, add_constant(VALUE_OBJECT(function)));

@@ -49,6 +49,7 @@ typedef enum {
     OP_GET_SUPER,
     OP_SUPER_INVOKE,
     OP_YIELD,
+    OP_AWAIT,
 } OpCode;
 
 typedef struct {

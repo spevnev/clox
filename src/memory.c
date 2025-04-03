@@ -49,12 +49,10 @@ void mark_value(Value *value) {
     if (value->type == VAL_OBJECT) mark_object(value->as.object);
 }
 
-static void mark_vm_roots(void) {
-    mark_object((Object *) vm.init_string);
-    hashmap_mark_entries(&vm.globals);
+static void mark_coroutines(Coroutine *head) {
+    for (Coroutine *current = head; current != NULL; current = current->next) {
+        mark_object((Object *) current->promise);
 
-    Coroutine *current = vm.coroutine;
-    do {
         for (Value *value = current->stack; value < current->stack_top; value++) {
             mark_value(value);
         }
@@ -62,9 +60,13 @@ static void mark_vm_roots(void) {
         for (CallFrame *frame = current->frames; frame <= current->frame; frame++) {
             mark_object((Object *) frame->closure);
         }
+    }
+}
 
-        current = current->next;
-    } while (current != vm.coroutine);
+static void mark_vm_roots(void) {
+    mark_coroutines(vm.coroutines_head);
+    mark_object((Object *) vm.init_string);
+    hashmap_mark_entries(&vm.globals);
 
     for (ObjUpvalue *upvalue = vm.open_upvalues; upvalue != NULL; upvalue = upvalue->next) {
         mark_object((Object *) upvalue);
@@ -107,7 +109,20 @@ static void trace_object(Object *object) {
             mark_value(&bound_method->instance);
             mark_object((Object *) bound_method->method);
         } break;
-        default: UNREACHABLE();
+        case OBJ_PROMISE: {
+            ObjPromise *promise = (ObjPromise *) object;
+
+            if (promise->is_fulfilled) {
+                mark_value(&promise->data.value);
+            } else {
+                mark_coroutines(promise->data.coroutines.head);
+            }
+
+            for (ObjPromise *current = promise->next; current != NULL; current = current->next) {
+                mark_object((Object *) current);
+            }
+        } break;
+        default:         UNREACHABLE();
     }
 }
 
@@ -160,6 +175,7 @@ void collect_garbage(void) {
         Object *object = vm.grey_objects[--vm.grey_length];
         trace_object(object);
     }
+
     delete_unmarked_strings();
     sweep();
 

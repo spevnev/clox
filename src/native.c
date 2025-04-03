@@ -251,7 +251,7 @@ static NativeFunctionDef functions[] = {
     // clang-format on
 };
 
-void create_native_functions(void) {
+void add_native_functions(void) {
     for (size_t i = 0; i < sizeof(functions) / sizeof(*functions); i++) {
         ObjString *name = copy_string(functions[i].name, strlen(functions[i].name));
         Value function = VALUE_OBJECT(new_native(functions[i]));

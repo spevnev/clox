@@ -68,6 +68,7 @@ static Coroutine *new_coroutine(void) {
     Coroutine *coroutine = malloc(sizeof(*coroutine));
     coroutine->prev = NULL;
     coroutine->next = NULL;
+    coroutine->promise = new_promise();
     coroutine->frame = NULL;
     coroutine->stack_top = coroutine->stack;
     return coroutine;
@@ -81,6 +82,36 @@ static void init_callstack(Coroutine *coroutine, ObjClosure *closure) {
     frame->slots = coroutine->stack;
 }
 
+static void vm_add_coroutine_before(Coroutine *coroutine) {
+    assert(vm.coroutine != NULL);
+
+    coroutine->next = vm.coroutine;
+    coroutine->prev = vm.coroutine->prev;
+
+    if (vm.coroutine->prev == NULL) {
+        vm.coroutines_head = coroutine;
+    } else {
+        vm.coroutine->prev->next = coroutine;
+    }
+    vm.coroutine->prev = coroutine;
+}
+
+static Coroutine *vm_remove_current_coroutine(void) {
+    assert(vm.coroutine != NULL);
+
+    if (vm.coroutine->next != NULL) vm.coroutine->next->prev = vm.coroutine->prev;
+
+    if (vm.coroutine->prev == NULL) {
+        vm.coroutines_head = vm.coroutine->next;
+    } else {
+        vm.coroutine->prev->next = vm.coroutine->next;
+    }
+
+    Coroutine *removed = vm.coroutine;
+    vm.coroutine = vm.coroutine->next;
+    return removed;
+}
+
 static bool call(ObjClosure *closure, uint8_t arg_num) {
     if (arg_num != closure->function->arity) {
         runtime_error("Function '%s' expected %d arguments but got %d", closure->function->name->cstr,
@@ -91,10 +122,7 @@ static bool call(ObjClosure *closure, uint8_t arg_num) {
     if (closure->function->is_async) {
         Coroutine *coroutine = new_coroutine();
         init_callstack(coroutine, closure);
-        coroutine->next = vm.coroutine->next;
-        coroutine->prev = vm.coroutine;
-        vm.coroutine->next->prev = coroutine;
-        vm.coroutine->next = coroutine;
+        vm_add_coroutine_before(coroutine);
 
         // Move arguments from callee's stack to the new coroutine.
         vm.coroutine->stack_top -= arg_num + 1;
@@ -102,8 +130,7 @@ static bool call(ObjClosure *closure, uint8_t arg_num) {
         memcpy(coroutine->stack, vm.coroutine->stack_top, sizeof(*coroutine->stack) * (arg_num + 1));
 
         // Push promise to the callee's stack.
-        // TODO: Replace nil with promise
-        stack_push(VALUE_NIL());
+        stack_push(VALUE_OBJECT(coroutine->promise));
 
         vm.coroutine = coroutine;
     } else {
@@ -199,6 +226,45 @@ static void close_upvalues(Value *value) {
     vm.open_upvalues = current;
 }
 
+static void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine) {
+    assert(promise->is_fulfilled == false);
+
+    if (promise->data.coroutines.head == NULL) {
+        coroutine->prev = NULL;
+        coroutine->next = NULL;
+        promise->data.coroutines.head = coroutine;
+        promise->data.coroutines.tail = coroutine;
+    } else {
+        coroutine->prev = promise->data.coroutines.tail;
+        coroutine->next = NULL;
+        promise->data.coroutines.tail->next = coroutine;
+        promise->data.coroutines.tail = coroutine;
+    }
+}
+
+static void fulfill_promise(ObjPromise *promise, Value value) {
+    assert(promise->is_fulfilled == false);
+
+    // Merge waiting coroutines with active ones.
+    if (promise->data.coroutines.head != NULL) {
+        for (Coroutine *current = promise->data.coroutines.head; current != NULL; current = current->next) {
+            // Overwrite the promise at the top of the stack with the value.
+            *(current->stack_top - 1) = value;
+        }
+
+        promise->data.coroutines.tail->next = vm.coroutines_head;
+        if (vm.coroutines_head != NULL) vm.coroutines_head->prev = promise->data.coroutines.tail;
+        vm.coroutines_head = promise->data.coroutines.head;
+    }
+
+    promise->is_fulfilled = true;
+    promise->data.value = value;
+
+    for (ObjPromise *current = promise->next; current != NULL; current = current->next) {
+        fulfill_promise(current, value);
+    }
+}
+
 static InterpretResult run(void) {
 #define READ_U8() (*vm.coroutine->frame->ip++)
 #define READ_U16() \
@@ -231,6 +297,16 @@ static InterpretResult run(void) {
     } while (0)
 
     for (;;) {
+        // After iteration over active coroutines, check the sleeping ones
+        // wake them up and add to the list.
+        if (vm.coroutine == NULL) {
+            // All coroutines have finished, exit the program.
+            if (vm.coroutines_head == NULL) return RESULT_OK;
+
+            // Start again from the head.
+            vm.coroutine = vm.coroutines_head;
+        }
+
 #ifdef DEBUG_TRACE_EXECUTION
         print_stack();
         const Chunk *chunk = &vm.coroutine->frame->closure->function->chunk;
@@ -359,30 +435,31 @@ static InterpretResult run(void) {
                 // Save return value.
                 Value return_value = stack_pop();
 
-                if (vm.coroutine->frame == vm.coroutine->frames) {
-                    stack_pop();
-
-                    // If it's the last callframe of the last coroutine, exit.
-                    if (vm.coroutine->next == vm.coroutine) return RESULT_OK;
-
-                    // Otherwise, remove the finished coroutine and schedule the next one.
-                    Coroutine *finished_coroutine = vm.coroutine;
-                    vm.coroutine->prev->next = vm.coroutine->next;
-                    vm.coroutine->next->prev = vm.coroutine->prev;
-                    vm.coroutine = vm.coroutine->next;
-                    free(finished_coroutine);
-                    break;
-                }
-
-                // Close upvalues and pop local variables.
+                // Close upvalues.
                 close_upvalues(vm.coroutine->frame->slots);
-                vm.coroutine->stack_top = vm.coroutine->frame->slots;
 
-                // Pop frame.
-                vm.coroutine->frame--;
+                // Check if it's the last callframe in the coroutine.
+                if (vm.coroutine->frame == vm.coroutine->frames) {
+                    Coroutine *finished = vm_remove_current_coroutine();
+                    if (is_object_type(return_value, OBJ_PROMISE)) {
+                        ObjPromise *promise = (ObjPromise *) return_value.as.object;
+                        if (promise->is_fulfilled) {
+                            fulfill_promise(finished->promise, promise->data.value);
+                        } else {
+                            promise->next = finished->promise;
+                        }
+                    } else {
+                        fulfill_promise(finished->promise, return_value);
+                    }
+                    free(finished);
+                } else {
+                    // Pop frame and its stack.
+                    vm.coroutine->stack_top = vm.coroutine->frame->slots;
+                    vm.coroutine->frame--;
 
-                // Restore return value.
-                stack_push(return_value);
+                    // Restore return value.
+                    stack_push(return_value);
+                }
             } break;
             case OP_CLASS:  stack_push(VALUE_OBJECT(new_class(READ_STRING()))); break;
             case OP_METHOD: {
@@ -528,7 +605,23 @@ static InterpretResult run(void) {
                 return RESULT_RUNTIME_ERROR;
             } break;
             case OP_YIELD: vm.coroutine = vm.coroutine->next; break;
-            default:       UNREACHABLE();
+            case OP_AWAIT: {
+                Value promise_value = stack_peek(0);
+                if (!is_object_type(promise_value, OBJ_PROMISE)) {
+                    runtime_error("Operand must be a promise but found '%s'", value_to_temp_cstr(promise_value));
+                    return RESULT_RUNTIME_ERROR;
+                }
+                ObjPromise *promise = (ObjPromise *) promise_value.as.object;
+
+                if (promise->is_fulfilled) {
+                    stack_pop();
+                    stack_push(promise->data.value);
+                } else {
+                    Coroutine *waiting = vm_remove_current_coroutine();
+                    promise_add_coroutine(promise, waiting);
+                }
+            } break;
+            default: UNREACHABLE();
         }
     }
 
@@ -541,27 +634,27 @@ static InterpretResult run(void) {
 }
 
 void init_vm(void) {
-    Coroutine *coroutine = new_coroutine();
-    coroutine->next = coroutine;
-    coroutine->prev = coroutine;
-
-    vm.coroutine = coroutine;
+    vm.coroutine = vm.coroutines_head = new_coroutine();
     vm.next_gc = GC_INITIAL_THRESHOLD;
     vm.init_string = copy_string("init", 4);
 
-    create_native_functions();
+    add_native_functions();
 }
 
 void free_vm(void) {
-    free(vm.coroutine);
     free(vm.grey_objects);
     free_hashmap(&vm.strings);
     free_hashmap(&vm.globals);
 
-    Object *current = vm.objects;
-    while (current != NULL) {
+    for (Object *current = vm.objects; current != NULL;) {
         Object *next = current->next;
         free_object(current);
+        current = next;
+    }
+
+    for (Coroutine *current = vm.coroutines_head; current != NULL;) {
+        Coroutine *next = current->next;
+        free(current);
         current = next;
     }
 }

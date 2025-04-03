@@ -26,20 +26,23 @@ typedef struct {
 typedef struct Coroutine {
     struct Coroutine *prev;
     struct Coroutine *next;
+    ObjPromise *promise;
     CallFrame *frame;
-    CallFrame frames[CALLSTACK_SIZE];
     Value *stack_top;
+    CallFrame frames[CALLSTACK_SIZE];
     Value stack[STACK_SIZE];
 } Coroutine;
 
 typedef struct {
+    Coroutine *coroutines_head;
     Coroutine *coroutine;
-    HashMap strings;  // Set of interned strings (values are always null).
+    // Set of interned strings (values are always null).
+    HashMap strings;
     HashMap globals;
     ObjUpvalue *open_upvalues;
     ObjString *init_string;
-    // GC
-    bool enable_gc;  // Disabled while initializing VM.
+    // Disabled while initializing VM.
+    bool enable_gc;
     Object *objects;
     uint32_t grey_capacity;
     uint32_t grey_length;

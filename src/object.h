@@ -15,6 +15,8 @@ typedef enum {
     OBJ_CLASS,
     OBJ_INSTANCE,
     OBJ_BOUND_METHOD,
+    OBJ_PROMISE,
+    OBJ_SOCKET,
 } ObjectType;
 
 typedef struct Object {
@@ -83,6 +85,25 @@ typedef struct {
     ObjClosure *method;
 } ObjBoundMethod;
 
+typedef struct ObjPromise {
+    Object object;
+    bool is_fulfilled;
+    // Linked list of promises that are waiting for this one to be fulfilled.
+    struct ObjPromise *next;
+    union {
+        Value value;
+        struct {
+            struct Coroutine *tail;
+            struct Coroutine *head;
+        } coroutines;
+    } data;
+} ObjPromise;
+
+typedef struct {
+    Object object;
+    int fd;
+} ObjSocket;
+
 #ifdef INLINE_CACHING
 typedef uint16_t cache_id_t;
 #define CACHE_ID_MAX UINT16_MAX
@@ -100,6 +121,8 @@ ObjNative *new_native(NativeFunctionDef definition);
 ObjClass *new_class(ObjString *name);
 ObjInstance *new_instance(ObjClass *class);
 ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method);
+ObjPromise *new_promise(void);
+ObjSocket *new_socket(int fd);
 ObjString *copy_string(const char *cstr, uint32_t length);
 ObjString *concat_strings(const ObjString *a, const ObjString *b);
 

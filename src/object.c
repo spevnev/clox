@@ -21,23 +21,25 @@ const char *object_to_temp_cstr(const Object *object) {
     static char CSTR[1024];
 
     switch (object->type) {
-        case OBJ_UPVALUE: return "upvalue";
-        case OBJ_STRING:  return ((const ObjString *) object)->cstr;
-        case OBJ_CLASS:   return ((const ObjClass *) object)->name->cstr;
+        case OBJ_STRING: return ((const ObjString *) object)->cstr;
         case OBJ_FUNCTION:
             snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjFunction *) object)->name->cstr);
             return CSTR;
+        case OBJ_UPVALUE: return "upvalue";
         case OBJ_CLOSURE:
             snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjClosure *) object)->function->name->cstr);
             return CSTR;
         case OBJ_NATIVE: snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjNative *) object)->name); return CSTR;
+        case OBJ_CLASS:  return ((const ObjClass *) object)->name->cstr;
         case OBJ_INSTANCE:
             snprintf(CSTR, sizeof(CSTR), "%s instance", ((const ObjInstance *) object)->class->name->cstr);
             return CSTR;
         case OBJ_BOUND_METHOD:
             snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjBoundMethod *) object)->method->function->name->cstr);
             return CSTR;
-        default: UNREACHABLE();
+        case OBJ_PROMISE: return "<Promise>";
+        case OBJ_SOCKET:  return "<Socket>";
+        default:          UNREACHABLE();
     }
 }
 
@@ -69,7 +71,11 @@ void free_object(Object *object) {
             FREE(object, sizeof(ObjInstance));
         } break;
         case OBJ_BOUND_METHOD: FREE(object, sizeof(ObjBoundMethod)); break;
-        default:               UNREACHABLE();
+        case OBJ_PROMISE:
+            FREE(object, sizeof(ObjPromise));
+            break;
+        case OBJ_SOCKET: FREE(object, sizeof(ObjSocket)); break;
+        default:         UNREACHABLE();
     }
 }
 
@@ -141,6 +147,21 @@ ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method) {
     bound_method->instance = instance;
     bound_method->method = method;
     return bound_method;
+}
+
+ObjPromise *new_promise(void) {
+    ObjPromise *promise = (ObjPromise *) new_object(OBJ_PROMISE, sizeof(ObjPromise));
+    promise->is_fulfilled = false;
+    promise->next = NULL;
+    promise->data.coroutines.head = NULL;
+    promise->data.coroutines.tail = NULL;
+    return promise;
+}
+
+ObjSocket *new_socket(int fd) {
+    ObjSocket *socket = (ObjSocket *) new_object(OBJ_SOCKET, sizeof(ObjSocket));
+    socket->fd = fd;
+    return socket;
 }
 
 ObjString *copy_string(const char *cstr, uint32_t length) {
