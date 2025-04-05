@@ -27,6 +27,21 @@ static bool clock_(Value *result, UNUSED(Value *args)) {
     return true;
 }
 
+static bool sleep_(Value *result, Value *args) {
+    if (args[0].type != VAL_NUMBER || args[0].as.number < 0) {
+        runtime_error("The first argument is number of milliseconds, it must be a positive number");
+        return false;
+    }
+    double sleep_time_ms = args[0].as.number;
+
+    Coroutine *sleeping = ll_remove(&vm.active_head, &vm.coroutine);
+    sleeping->sleep_time_ns = sleep_time_ms * 1000000L;
+    ll_add_head(&vm.sleeping_head, sleeping);
+
+    *result = VALUE_NIL();
+    return true;
+}
+
 static bool has_field(Value *result, Value *args) {
     if (!is_object_type(args[0], OBJ_INSTANCE)) {
         runtime_error("The first argument must be an instance");
@@ -234,20 +249,16 @@ static bool close_(Value *result, Value *args) {
 
 static NativeFunctionDef functions[] = {
     // clang-format off
-    // name,         arity, function
-    { "clock",        0,    clock_           },
-
-    { "hasField",     2,    has_field        },
-    { "getField",     2,    get_field        },
-    { "setField",     3,    set_field        },
-    { "deleteField",  2,    delete_field     },
-
-    { "createServer", 0,    create_server    },
-    { "listen",       2,    server_listen    },
-    { "accept",       1,    server_accept    },
-    { "read",         2,    read_            },
-    { "write",        2,    write_           },
-    { "close",        1,    close_           },
+    // time
+    { "clock",         0,     clock_        },
+    { "sleep",         1,     sleep_        },
+    // instance
+    { "hasField",      2,     has_field     },
+    { "getField",      2,     get_field     },
+    { "setField",      3,     set_field     },
+    { "deleteField",   2,     delete_field  },
+    // net
+    { "createServer",  0,     create_server },
     // clang-format on
 };
 

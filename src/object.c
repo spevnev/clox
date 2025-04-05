@@ -71,11 +71,9 @@ void free_object(Object *object) {
             FREE(object, sizeof(ObjInstance));
         } break;
         case OBJ_BOUND_METHOD: FREE(object, sizeof(ObjBoundMethod)); break;
-        case OBJ_PROMISE:
-            FREE(object, sizeof(ObjPromise));
-            break;
-        case OBJ_SOCKET: FREE(object, sizeof(ObjSocket)); break;
-        default:         UNREACHABLE();
+        case OBJ_PROMISE:      FREE(object, sizeof(ObjPromise)); break;
+        case OBJ_SOCKET:       FREE(object, sizeof(ObjSocket)); break;
+        default:               UNREACHABLE();
     }
 }
 

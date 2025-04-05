@@ -27,6 +27,7 @@ typedef struct Coroutine {
     struct Coroutine *prev;
     struct Coroutine *next;
     ObjPromise *promise;
+    uint64_t sleep_time_ns;
     CallFrame *frame;
     Value *stack_top;
     CallFrame frames[CALLSTACK_SIZE];
@@ -34,7 +35,8 @@ typedef struct Coroutine {
 } Coroutine;
 
 typedef struct {
-    Coroutine *coroutines_head;
+    Coroutine *active_head;
+    Coroutine *sleeping_head;
     Coroutine *coroutine;
     // Set of interned strings (values are always null).
     HashMap strings;
@@ -59,6 +61,8 @@ void runtime_error(const char *fmt, ...);
 void stack_push(Value value);
 Value stack_pop(void);
 Value stack_peek(uint32_t distance);
+void ll_add_head(Coroutine **head, Coroutine *coroutine);
+Coroutine *ll_remove(Coroutine **head, Coroutine **current);
 InterpretResult interpret(const char *source);
 
 #endif  // CLOX_VM_H_

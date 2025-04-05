@@ -1,7 +1,12 @@
+#define _POSIX_C_SOURCE 200809L
 #include "vm.h"
 #include <assert.h>
+#include <errno.h>
+#include <math.h>
 #include <stdarg.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
@@ -24,16 +29,18 @@ static void print_stack(void) {
 }
 #endif
 
+#ifdef HIDE_STACKTRACE
+static void print_stacktrace(void) {}
+#else
 static void print_stacktrace(void) {
-#ifndef HIDE_STACKTRACE
     fprintf(stderr, "Stacktrace:\n");
     for (CallFrame *frame = vm.coroutine->frame; frame >= vm.coroutine->frames; frame--) {
         ObjFunction *function = frame->closure->function;
         Loc loc = function->chunk.locs[frame->ip - function->chunk.code - 1];
         fprintf(stderr, "    '%s' at %u:%u\n", function->name->cstr, loc.line, loc.column);
     }
-#endif
 }
+#endif
 
 void runtime_error(const char *fmt, ...) {
     Chunk *chunk = &vm.coroutine->frame->closure->function->chunk;
@@ -44,10 +51,12 @@ void runtime_error(const char *fmt, ...) {
     print_stacktrace();
 }
 
-void stack_push(Value value) {
-    assert(vm.coroutine->stack_top - vm.coroutine->stack < STACK_SIZE && "Stack overflow");
-    *(vm.coroutine->stack_top++) = value;
+static void coroutine_stack_push(Coroutine *coroutine, Value value) {
+    assert(coroutine->stack_top - coroutine->stack < STACK_SIZE && "Stack overflow");
+    *(coroutine->stack_top++) = value;
 }
+
+void stack_push(Value value) { coroutine_stack_push(vm.coroutine, value); }
 
 Value stack_pop(void) {
     assert(vm.coroutine->stack_top > vm.coroutine->stack && "Stack underflow");
@@ -82,34 +91,39 @@ static void init_callstack(Coroutine *coroutine, ObjClosure *closure) {
     frame->slots = coroutine->stack;
 }
 
+void ll_add_head(Coroutine **head, Coroutine *coroutine) {
+    coroutine->prev = NULL;
+    coroutine->next = *head;
+    if (*head != NULL) (*head)->prev = coroutine;
+    *head = coroutine;
+}
+
+Coroutine *ll_remove(Coroutine **head, Coroutine **current) {
+    if ((*current)->next != NULL) (*current)->next->prev = (*current)->prev;
+
+    if ((*current)->prev == NULL) {
+        *head = (*current)->next;
+    } else {
+        (*current)->prev->next = (*current)->next;
+    }
+
+    Coroutine *removed = *current;
+    *current = removed->next;
+    return removed;
+}
+
 static void vm_add_coroutine_before(Coroutine *coroutine) {
     assert(vm.coroutine != NULL);
 
-    coroutine->next = vm.coroutine;
     coroutine->prev = vm.coroutine->prev;
+    coroutine->next = vm.coroutine;
 
     if (vm.coroutine->prev == NULL) {
-        vm.coroutines_head = coroutine;
+        vm.active_head = coroutine;
     } else {
         vm.coroutine->prev->next = coroutine;
     }
     vm.coroutine->prev = coroutine;
-}
-
-static Coroutine *vm_remove_current_coroutine(void) {
-    assert(vm.coroutine != NULL);
-
-    if (vm.coroutine->next != NULL) vm.coroutine->next->prev = vm.coroutine->prev;
-
-    if (vm.coroutine->prev == NULL) {
-        vm.coroutines_head = vm.coroutine->next;
-    } else {
-        vm.coroutine->prev->next = vm.coroutine->next;
-    }
-
-    Coroutine *removed = vm.coroutine;
-    vm.coroutine = vm.coroutine->next;
-    return removed;
 }
 
 static bool call(ObjClosure *closure, uint8_t arg_num) {
@@ -154,11 +168,15 @@ static bool call_native(ObjNative *native, uint8_t arg_num) {
         return false;
     }
 
-    Value return_value;
-    if (!native->function(&return_value, vm.coroutine->stack_top - arg_num)) return false;
+    Coroutine *callee = vm.coroutine;
 
-    vm.coroutine->stack_top -= arg_num + 1;
-    stack_push(return_value);
+    Value return_value;
+    if (!native->function(&return_value, callee->stack_top - arg_num)) return false;
+
+    // Don't use `vm.coroutine` directly after native function since it may have changed it.
+    callee->stack_top -= arg_num + 1;
+    coroutine_stack_push(callee, return_value);
+
     return true;
 }
 
@@ -252,9 +270,9 @@ static void fulfill_promise(ObjPromise *promise, Value value) {
             *(current->stack_top - 1) = value;
         }
 
-        promise->data.coroutines.tail->next = vm.coroutines_head;
-        if (vm.coroutines_head != NULL) vm.coroutines_head->prev = promise->data.coroutines.tail;
-        vm.coroutines_head = promise->data.coroutines.head;
+        promise->data.coroutines.tail->next = vm.active_head;
+        if (vm.active_head != NULL) vm.active_head->prev = promise->data.coroutines.tail;
+        vm.active_head = promise->data.coroutines.head;
     }
 
     promise->is_fulfilled = true;
@@ -263,6 +281,38 @@ static void fulfill_promise(ObjPromise *promise, Value value) {
     for (ObjPromise *current = promise->next; current != NULL; current = current->next) {
         fulfill_promise(current, value);
     }
+}
+
+#define NS_IN_SEC 1000000000L
+
+static uint64_t get_time_ns(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) PANIC("Unexpected error in clock_gettime: %s", strerror(errno));
+    return ts.tv_sec * NS_IN_SEC + ts.tv_nsec;
+}
+
+static void sleep_ns(uint64_t ns) {
+    struct timespec ts = {.tv_sec = ns / NS_IN_SEC, .tv_nsec = ns % NS_IN_SEC};
+    if (nanosleep(&ts, NULL) != 0) PANIC("Unexpected error in nanosleep: %s", strerror(errno));
+}
+
+// Updates timers on all sleeping coroutines, wakes up if the timer has finished.
+// Returns the minimum timer in nanoseconds.
+static uint64_t update_sleeping_coroutines(uint64_t time_diff_ns) {
+    uint64_t min_wait_ns = UINT64_MAX;
+    Coroutine *current = vm.sleeping_head;
+    while (current != NULL) {
+        if (current->sleep_time_ns <= time_diff_ns) {
+            Coroutine *removed = ll_remove(&vm.sleeping_head, &current);
+            ll_add_head(&vm.active_head, removed);
+        } else {
+            current->sleep_time_ns -= time_diff_ns;
+            if (current->sleep_time_ns < min_wait_ns) min_wait_ns = current->sleep_time_ns;
+
+            current = current->next;
+        }
+    }
+    return min_wait_ns;
 }
 
 static InterpretResult run(void) {
@@ -296,15 +346,27 @@ static InterpretResult run(void) {
         stack_push(value_type(a op b));                                                                  \
     } while (0)
 
+    uint64_t time_ns = get_time_ns();
     for (;;) {
-        // After iteration over active coroutines, check the sleeping ones
-        // wake them up and add to the list.
+        // After iteration over all active coroutines, check the sleeping ones.
         if (vm.coroutine == NULL) {
-            // All coroutines have finished, exit the program.
-            if (vm.coroutines_head == NULL) return RESULT_OK;
+            uint64_t new_time_ns = get_time_ns();
+            // TODO: Accumulate time difference and only update once min_wait_ns has passed.
+            uint64_t min_wait_ns = update_sleeping_coroutines(new_time_ns - time_ns);
+            time_ns = new_time_ns;
+
+            // There are no active coroutines.
+            if (vm.active_head == NULL) {
+                // There are no sleeping coroutines.
+                if (min_wait_ns == UINT64_MAX) return RESULT_OK;
+
+                // Sleep until the next sleeping coroutine wakes up.
+                sleep_ns(min_wait_ns);
+                continue;
+            }
 
             // Start again from the head.
-            vm.coroutine = vm.coroutines_head;
+            vm.coroutine = vm.active_head;
         }
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -440,7 +502,7 @@ static InterpretResult run(void) {
 
                 // Check if it's the last callframe in the coroutine.
                 if (vm.coroutine->frame == vm.coroutine->frames) {
-                    Coroutine *finished = vm_remove_current_coroutine();
+                    Coroutine *finished = ll_remove(&vm.active_head, &vm.coroutine);
                     if (is_object_type(return_value, OBJ_PROMISE)) {
                         ObjPromise *promise = (ObjPromise *) return_value.as.object;
                         if (promise->is_fulfilled) {
@@ -509,9 +571,9 @@ static InterpretResult run(void) {
                     runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
                     return RESULT_RUNTIME_ERROR;
                 }
+                ObjInstance *instance = (ObjInstance *) instance_value.as.object;
 
                 Value value = stack_peek(0);
-                ObjInstance *instance = (ObjInstance *) instance_value.as.object;
                 hashmap_set(&instance->fields, READ_STRING(), value);
                 stack_popn(2);
                 stack_push(value);
@@ -617,7 +679,7 @@ static InterpretResult run(void) {
                     stack_pop();
                     stack_push(promise->data.value);
                 } else {
-                    Coroutine *waiting = vm_remove_current_coroutine();
+                    Coroutine *waiting = ll_remove(&vm.active_head, &vm.coroutine);
                     promise_add_coroutine(promise, waiting);
                 }
             } break;
@@ -634,7 +696,7 @@ static InterpretResult run(void) {
 }
 
 void init_vm(void) {
-    vm.coroutine = vm.coroutines_head = new_coroutine();
+    vm.coroutine = vm.active_head = new_coroutine();
     vm.next_gc = GC_INITIAL_THRESHOLD;
     vm.init_string = copy_string("init", 4);
 
@@ -652,7 +714,7 @@ void free_vm(void) {
         current = next;
     }
 
-    for (Coroutine *current = vm.coroutines_head; current != NULL;) {
+    for (Coroutine *current = vm.active_head; current != NULL;) {
         Coroutine *next = current->next;
         free(current);
         current = next;
