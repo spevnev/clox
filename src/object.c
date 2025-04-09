@@ -74,7 +74,7 @@ void free_object(Object *object) {
 static Object *new_object(ObjectType type, uint32_t size) {
     Object *object = ALLOC(size);
     object->is_marked = false;
-    object->is_root = false;
+    object->pin_count = 0;
     object->type = type;
     object->next = vm.objects;
     vm.objects = object;
@@ -219,17 +219,18 @@ ObjString *finish_new_string(ObjString *string, uint32_t length) {
 }
 
 void object_disable_gc(Object *object) {
-    assert(object->is_root == false);
-    if (vm.root_length >= vm.root_capacity) {
-        vm.root_capacity = OBJECTS_GROW_CAPACITY(vm.root_capacity);
-        vm.root_objects = realloc(vm.root_objects, sizeof(*vm.root_objects) * vm.root_capacity);
-        if (vm.root_objects == NULL) OUT_OF_MEMORY();
+    if (vm.pinned_length >= vm.pinned_capacity) {
+        vm.pinned_capacity = OBJECTS_GROW_CAPACITY(vm.pinned_capacity);
+        vm.pinned_objects = realloc(vm.pinned_objects, sizeof(*vm.pinned_objects) * vm.pinned_capacity);
+        if (vm.pinned_objects == NULL) OUT_OF_MEMORY();
     }
-    vm.root_objects[vm.root_length++] = object;
-    object->is_root = true;
+    vm.pinned_objects[vm.pinned_length++] = object;
+
+    assert(object->pin_count < UINT8_MAX);
+    object->pin_count++;
 }
 
 void object_enable_gc(Object *object) {
-    assert(object->is_root == true);
-    object->is_root = false;
+    assert(object->pin_count > 0);
+    object->pin_count--;
 }

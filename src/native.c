@@ -186,8 +186,8 @@ static bool server_accept_callback(EpollData *epoll_data) {
     }
 
     fulfill_promise(data->promise, VALUE_NUMBER(client_fd));
-
     object_enable_gc((Object *) data->promise);
+    vm_epoll_delete(epoll_data);
     return true;
 }
 
@@ -225,14 +225,16 @@ static bool socket_read_callback(EpollData *epoll_data) {
 
     ssize_t bytes = read(epoll_data->fd, data->string->cstr, data->length);
     if (bytes == -1) {
+        if (errno == EAGAIN) return true;
+
         runtime_error("Error in read (%s)", strerror(errno));
         return false;
     }
 
     fulfill_promise(data->promise, VALUE_OBJECT(finish_new_string(data->string, bytes)));
-
     object_enable_gc((Object *) data->promise);
     object_enable_gc((Object *) data->string);
+    vm_epoll_delete(epoll_data);
     return true;
 }
 
@@ -269,7 +271,85 @@ static bool socket_read(Value *result, Value *args) {
     return true;
 }
 
+typedef struct {
+    ObjString *string;
+    uint32_t offset;
+    ObjPromise *promise;
+} SocketWriteData;
 
+static bool socket_write_callback(EpollData *epoll_data) {
+    SocketWriteData *data = (void *) epoll_data->data;
+
+    uint32_t length = data->string->length - data->offset;
+    ssize_t bytes = write(epoll_data->fd, data->string->cstr + data->offset, length);
+    if (bytes == -1) {
+        if (errno == EAGAIN) return true;
+        runtime_error("Error in write (%s)", strerror(errno));
+        return false;
+    }
+    if (bytes < length) {
+        data->offset += bytes;
+        return true;
+    }
+
+    fulfill_promise(data->promise, VALUE_NIL());
+    object_enable_gc((Object *) data->promise);
+    object_enable_gc((Object *) data->string);
+    vm_epoll_delete(epoll_data);
+    return true;
+}
+
+static bool socket_write(Value *result, Value *args) {
+    if (!check_int_arg(args[0], 0, INT_MAX)) {
+        runtime_error("The first argument must be a socket");
+        return false;
+    }
+    if (!is_object_type(args[1], OBJ_STRING)) {
+        runtime_error("The second argument must be a string");
+        return false;
+    }
+    int fd = (int) args[0].as.number;
+    ObjString *string = (ObjString *) args[1].as.object;
+
+    ObjPromise *promise = new_promise();
+    *result = VALUE_OBJECT(promise);
+
+    ssize_t bytes = write(fd, string->cstr, string->length);
+    // Ignore EAGAIN and setup epoll as if nothing was written.
+    if (bytes == -1 && errno == EAGAIN) bytes = 0;
+    if (bytes == -1) {
+        runtime_error("Error in write (%s)", strerror(errno));
+        return false;
+    }
+    if (bytes == string->length) {
+        fulfill_promise(promise, VALUE_NIL());
+        return true;
+    }
+    SocketWriteData *data = vm_epoll_add(fd, EPOLLOUT, &socket_write_callback, sizeof(SocketWriteData));
+    data->offset = bytes;
+    data->string = string;
+    data->promise = promise;
+
+    object_disable_gc((Object *) promise);
+    object_disable_gc((Object *) string);
+    return true;
+}
+
+static bool socket_close(Value *result, Value *args) {
+    if (!check_int_arg(args[0], 0, INT_MAX)) {
+        runtime_error("The first argument must be a socket");
+        return false;
+    }
+    int fd = (int) args[0].as.number;
+
+    // https://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable
+    // Read pending data before closing to avoid sending RST.
+    shutdown(fd, SHUT_WR);
+    static char buffer[4096];
+    while (read(fd, buffer, sizeof(buffer) / sizeof(*buffer)) > 0);
+    close(fd);
+
+    *result = VALUE_NIL();
     return true;
 }
 
@@ -288,6 +368,8 @@ static NativeFunctionDef functions[] = {
     { "serverListen",  2,     server_listen },
     { "serverAccept",  1,     server_accept },
     { "socketRead",    2,     socket_read   },
+    { "socketWrite",   2,     socket_write  },
+    { "socketClose",   1,     socket_close  },
     // clang-format on
 };
 

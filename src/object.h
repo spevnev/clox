@@ -20,7 +20,7 @@ typedef enum {
 
 typedef struct Object {
     bool is_marked;
-    bool is_root;
+    uint8_t pin_count;
     ObjectType type;
     struct Object *next;
 } Object;
@@ -125,9 +125,9 @@ ObjString *create_new_string(uint32_t capacity);
 // Finishes string creation by setting length, hash and interning it.
 // Returns interned string or the same one.
 ObjString *finish_new_string(ObjString *string, uint32_t length);
-// Prevents GC from freeing it by adding to the list of `root_objects`.
+// Prevents GC from freeing it by adding to the list of `pinned_objects`.
 void object_disable_gc(Object *object);
-// Clears `is_root` flag to mark for removal from `root_objects` on the next GC.
+// Decrements pin count, when it hits 0 it's marked for removal from `pinned_objects` during GC.
 void object_enable_gc(Object *object);
 
 static inline bool is_object_type(Value value, ObjectType type) {

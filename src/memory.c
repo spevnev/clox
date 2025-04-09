@@ -74,15 +74,15 @@ static void mark_vm_roots(void) {
     }
 
     uint32_t i = 0;
-    while (i < vm.root_length) {
-        Object *object = vm.root_objects[i];
-        if (object->is_root) {
+    while (i < vm.pinned_length) {
+        Object *object = vm.pinned_objects[i];
+        if (object->pin_count > 0) {
             mark_object(object);
             i++;
         } else {
             // Remove from the array by swapping with the last element and popping it.
-            if (i < vm.root_length - 1) vm.root_objects[i] = vm.root_objects[vm.root_length - 1];
-            vm.root_length--;
+            if (i < vm.pinned_length - 1) vm.pinned_objects[i] = vm.pinned_objects[vm.pinned_length - 1];
+            vm.pinned_length--;
         }
     }
 }

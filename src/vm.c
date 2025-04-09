@@ -315,24 +315,35 @@ void *vm_epoll_add(int fd, uint32_t epoll_events, EpollCallbackFn callback, size
     EpollData *epoll_data = malloc(sizeof(*epoll_data) + callback_data_size);
     if (epoll_data == NULL) OUT_OF_MEMORY();
     epoll_data->fd = fd;
+    epoll_data->close_fd = false;
     epoll_data->creator = vm.coroutine;
     epoll_data->callback = callback;
 
-    struct epoll_event event = {
-        .events = epoll_events | EPOLLONESHOT,
-        .data.ptr = epoll_data,
-    };
-    if (epoll_ctl(vm.epoll_fd, EPOLL_CTL_ADD, fd, &event) != 0) PANIC("Error in epoll_ctl: %s", strerror(errno));
+    struct epoll_event event = {.events = epoll_events, .data.ptr = epoll_data};
+
+    bool retried = false;
+retry:
+    if (epoll_ctl(vm.epoll_fd, EPOLL_CTL_ADD, fd, &event) != 0) {
+        if (retried || errno != EEXIST) PANIC("Error in epoll_ctl: %s", strerror(errno));
+
+        // Duplicate file descriptor, mark it for closure on epoll_delete, and retry.
+        fd = dup(fd);
+        epoll_data->fd = fd;
+        epoll_data->close_fd = true;
+        retried = true;
+        goto retry;
+    }
 
     vm.epoll_count++;
     return epoll_data->data;
 }
 
-static void vm_epoll_delete(EpollData *epoll_data) {
+void vm_epoll_delete(EpollData *epoll_data) {
     if (epoll_ctl(vm.epoll_fd, EPOLL_CTL_DEL, epoll_data->fd, NULL) != 0) {
         PANIC("Error in epoll_ctl: %s", strerror(errno));
     }
     vm.epoll_count--;
+    if (epoll_data->close_fd) close(epoll_data->fd);
     free(epoll_data);
 }
 
@@ -352,8 +363,6 @@ static bool update_polling(uint64_t ms) {
         vm.coroutine = epoll_data->creator;
         if (!epoll_data->callback(epoll_data)) return false;
         vm.coroutine = current;
-
-        vm_epoll_delete(epoll_data);
     }
 
     return true;
@@ -754,7 +763,7 @@ void init_vm(void) {
 
 void free_vm(void) {
     close(vm.epoll_fd);
-    free(vm.root_objects);
+    free(vm.pinned_objects);
     free(vm.grey_objects);
     free_hashmap(&vm.strings);
     free_hashmap(&vm.globals);

@@ -40,6 +40,7 @@ typedef bool (*EpollCallbackFn)(struct EpollData *data);
 
 typedef struct EpollData {
     int fd;
+    bool close_fd;
     Coroutine *creator;
     EpollCallbackFn callback;
     char data[];
@@ -59,9 +60,9 @@ typedef struct {
     // Disabled while initializing VM.
     bool enable_gc;
     Object *objects;
-    uint32_t root_capacity;
-    uint32_t root_length;
-    Object **root_objects;
+    uint32_t pinned_capacity;
+    uint32_t pinned_length;
+    Object **pinned_objects;
     uint32_t grey_capacity;
     uint32_t grey_length;
     Object **grey_objects;
@@ -82,6 +83,7 @@ Coroutine *ll_remove(Coroutine **head, Coroutine **current);
 void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine);
 void fulfill_promise(ObjPromise *promise, Value value);
 void *vm_epoll_add(int fd, uint32_t epoll_events, EpollCallbackFn callback, size_t callback_data_size);
+void vm_epoll_delete(EpollData *epoll_data);
 InterpretResult interpret(const char *source);
 
 #endif  // CLOX_VM_H_
