@@ -177,7 +177,8 @@ static bool server_accept_callback(EpollData *epoll_data) {
 
     int client_fd = accept(epoll_data->fd, NULL, NULL);
     if (client_fd == -1) {
-        runtime_error("Error in accept:(%s)", strerror(errno));
+        if (errno == EAGAIN) return true;
+        runtime_error("Error in accept (%s)", strerror(errno));
         return false;
     }
     if (fcntl(client_fd, F_SETFL, O_NONBLOCK) == -1) {
@@ -336,6 +337,7 @@ static bool socket_write(Value *result, Value *args) {
         fulfill_promise(promise, VALUE_NIL());
         return true;
     }
+
     SocketWriteData *data = vm_epoll_add(fd, EPOLLOUT, &socket_write_callback, sizeof(SocketWriteData));
     data->offset = bytes;
     data->string = string;

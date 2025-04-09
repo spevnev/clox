@@ -248,7 +248,7 @@ static void close_upvalues(Value *value) {
 }
 
 void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine) {
-    assert(promise->is_fulfilled == false);
+    assert(!promise->is_fulfilled);
 
     if (promise->data.coroutines.head == NULL) {
         coroutine->prev = NULL;
@@ -264,7 +264,7 @@ void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine) {
 }
 
 void fulfill_promise(ObjPromise *promise, Value value) {
-    assert(promise->is_fulfilled == false);
+    assert(!promise->is_fulfilled);
 
     // Merge waiting coroutines with active ones.
     if (promise->data.coroutines.head != NULL) {
