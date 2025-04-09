@@ -554,6 +554,10 @@ static void template(UNUSED(bool can_assign)) {
 }
 
 static void await(UNUSED(bool can_assign)) {
+    if (c->function_type != FUN_SCRIPT && c->function_type != FUN_ASYNC) {
+        error_prev("Cannot await outside of async function");
+    }
+
     parse_precedence(PREC_UNARY);
     emit_byte(OP_AWAIT);
 }
@@ -954,8 +958,15 @@ static void switch_stmt(void) {
 }
 
 static void yield_stmt(void) {
+    Loc loc = p.current.loc;
     advance();
     expect(TOKEN_SEMICOLON, "Expected ';' after yield");
+
+    if (c->function_type != FUN_SCRIPT && c->function_type != FUN_ASYNC) {
+        error_at(loc, "Cannot yield outside of async function");
+        return;
+    }
+
     emit_byte(OP_YIELD);
 }
 
