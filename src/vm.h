@@ -9,6 +9,7 @@
 #include "value.h"
 
 typedef enum {
+    RESULT_NONE,
     RESULT_OK,
     RESULT_COMPILE_ERROR,
     RESULT_RUNTIME_ERROR,
@@ -72,8 +73,7 @@ typedef struct {
 
 extern VM vm;
 
-void init_vm(void);
-void free_vm(void);
+uint64_t get_time_ms(void);
 void runtime_error(const char *fmt, ...);
 void stack_push(Value value);
 Value stack_pop(void);
@@ -84,6 +84,9 @@ void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine);
 void fulfill_promise(ObjPromise *promise, Value value);
 void *vm_epoll_add(int fd, uint32_t epoll_events, EpollCallbackFn callback, size_t callback_data_size);
 void vm_epoll_delete(EpollData *epoll_data);
+InterpretResult schedule_coroutine(void);
+void init_vm(void);
+void free_vm(void);
 InterpretResult interpret(const char *source);
 
 #endif  // CLOX_VM_H_

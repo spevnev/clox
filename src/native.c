@@ -34,11 +34,13 @@ static bool sleep_(Value *result, Value *args) {
         runtime_error("The first argument is number of milliseconds, it must be a positive number");
         return false;
     }
-    double sleep_time_ms = args[0].as.number;
+    double duration_ms = args[0].as.number;
 
     Coroutine *sleeping = ll_remove(&vm.active_head, &vm.coroutine);
-    sleeping->sleep_time_ms = sleep_time_ms;
+    sleeping->sleep_time_ms = get_time_ms() + duration_ms;
     ll_add_head(&vm.sleeping_head, sleeping);
+
+    if (vm.coroutine == NULL && schedule_coroutine() == RESULT_RUNTIME_ERROR) return false;
 
     *result = VALUE_NIL();
     return true;

@@ -20,6 +20,12 @@
 
 VM vm = {0};
 
+uint64_t get_time_ms(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) PANIC("Error in clock_gettime: %s", strerror(errno));
+    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
+}
+
 #ifdef DEBUG_TRACE_EXECUTION
 static void print_stack(void) {
     printf("Stack: ");
@@ -286,29 +292,23 @@ void fulfill_promise(ObjPromise *promise, Value value) {
     }
 }
 
-static uint64_t get_time_ms(void) {
-    struct timespec ts;
-    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) PANIC("Error in clock_gettime: %s", strerror(errno));
-    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
-}
-
-// Updates timers on all sleeping coroutines, wakes up if the timer has finished.
-// Returns the minimum timer in miliseconds.
-static uint64_t update_sleeping_coroutines(uint64_t time_diff_ms) {
+// Checks timers on all sleeping coroutines, wakes up if the timer has finished.
+// Returns the minimum time in miliseconds until the soonest one wakes up.
+static uint64_t check_sleeping_coroutines(void) {
+    uint64_t current_ms = get_time_ms();
     uint64_t min_wait_ms = UINT64_MAX;
     Coroutine *current = vm.sleeping_head;
     while (current != NULL) {
-        if (current->sleep_time_ms <= time_diff_ms) {
+        if (current->sleep_time_ms <= current_ms) {
             Coroutine *removed = ll_remove(&vm.sleeping_head, &current);
             ll_add_head(&vm.active_head, removed);
         } else {
-            current->sleep_time_ms -= time_diff_ms;
             if (current->sleep_time_ms < min_wait_ms) min_wait_ms = current->sleep_time_ms;
-
             current = current->next;
         }
     }
-    return min_wait_ms;
+    if (min_wait_ms == UINT64_MAX) return UINT64_MAX;
+    return min_wait_ms - current_ms;
 }
 
 void *vm_epoll_add(int fd, uint32_t epoll_events, EpollCallbackFn callback, size_t callback_data_size) {
@@ -348,7 +348,7 @@ void vm_epoll_delete(EpollData *epoll_data) {
 }
 
 // Checks epoll for events and executes callbacks that may wake up coroutines.
-static bool update_polling(uint64_t ms) {
+static bool check_polling_coroutines(uint64_t ms) {
     const int max_events = 16;
     struct epoll_event events[max_events];
 
@@ -366,6 +366,31 @@ static bool update_polling(uint64_t ms) {
     }
 
     return true;
+}
+
+InterpretResult schedule_coroutine(void) {
+    assert(vm.coroutine == NULL);
+
+    for (;;) {
+        // Check sleeping coroutines and keep timer until the soonest coroutine.
+        uint64_t min_wait_ms = check_sleeping_coroutines();
+
+        // Check IO events without blocking.
+        if (!check_polling_coroutines(0)) return RESULT_RUNTIME_ERROR;
+
+        // There are currently active coroutines.
+        if (vm.active_head != NULL) {
+            // Start again from the head.
+            vm.coroutine = vm.active_head;
+            return RESULT_NONE;
+        }
+
+        // There are no sleeping and no polling coroutines, finish execution.
+        if (min_wait_ms == UINT64_MAX && vm.epoll_count == 0) return RESULT_OK;
+
+        // Block until sleeping coroutine wakes up, or IO event happens.
+        if (!check_polling_coroutines(min_wait_ms)) return RESULT_RUNTIME_ERROR;
+    }
 }
 
 static InterpretResult run(void) {
@@ -399,32 +424,13 @@ static InterpretResult run(void) {
         stack_push(value_type(a op b));                                                                  \
     } while (0)
 
-    uint64_t time_ms = get_time_ms();
+#define SCHEDULE_COROUTINE()                           \
+    if (vm.coroutine == NULL) {                        \
+        InterpretResult result = schedule_coroutine(); \
+        if (result != RESULT_NONE) return result;      \
+    }
+
     for (;;) {
-        // After iteration over all active coroutines, check the sleeping ones.
-        if (vm.coroutine == NULL) {
-            uint64_t new_time_ms = get_time_ms();
-            // TODO: Accumulate time difference and only update once min_wait_ms has passed.
-            uint64_t min_wait_ms = update_sleeping_coroutines(new_time_ms - time_ms);
-            time_ms = new_time_ms;
-
-            // Check IO events without blocking.
-            if (!update_polling(0)) return RESULT_RUNTIME_ERROR;
-
-            // There are no active coroutines.
-            if (vm.active_head == NULL) {
-                // There are no sleeping and no polling coroutines.
-                if (min_wait_ms == UINT64_MAX && vm.epoll_count == 0) return RESULT_OK;
-
-                // Block until sleeping coroutine wakes up, or IO event happens.
-                if (!update_polling(min_wait_ms)) return RESULT_RUNTIME_ERROR;
-                continue;
-            }
-
-            // Start again from the head.
-            vm.coroutine = vm.active_head;
-        }
-
 #ifdef DEBUG_TRACE_EXECUTION
         print_stack();
         const Chunk *chunk = &vm.coroutine->frame->closure->function->chunk;
@@ -570,6 +576,7 @@ static InterpretResult run(void) {
                         fulfill_promise(finished->promise, return_value);
                     }
                     free(finished);
+                    SCHEDULE_COROUTINE();
                 } else {
                     // Pop frame and its stack.
                     vm.coroutine->stack_top = vm.coroutine->frame->slots;
@@ -722,7 +729,10 @@ static InterpretResult run(void) {
                 runtime_error("Undefined superclass method '%s'", name->cstr);
                 return RESULT_RUNTIME_ERROR;
             } break;
-            case OP_YIELD: vm.coroutine = vm.coroutine->next; break;
+            case OP_YIELD:
+                vm.coroutine = vm.coroutine->next;
+                SCHEDULE_COROUTINE();
+                break;
             case OP_AWAIT: {
                 Value promise_value = stack_peek(0);
                 if (!is_object_type(promise_value, OBJ_PROMISE)) {
@@ -737,6 +747,7 @@ static InterpretResult run(void) {
                 } else {
                     Coroutine *waiting = ll_remove(&vm.active_head, &vm.coroutine);
                     promise_add_coroutine(promise, waiting);
+                    SCHEDULE_COROUTINE();
                 }
             } break;
             default: UNREACHABLE();
@@ -749,6 +760,7 @@ static InterpretResult run(void) {
 #undef READ_STRING
 #undef UNARY_OP
 #undef BINARY_OP
+#undef SCHEDULE_COROUTINE
 }
 
 void init_vm(void) {
