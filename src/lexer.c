@@ -76,22 +76,19 @@ static Token string(bool is_template) {
     while (!is_done() && peek() != '"') {
         bool is_escaped = false;
         while (match('\\')) is_escaped = !is_escaped;
+        if (is_escaped) {
+            advance();
+            continue;
+        }
 
         switch (peek()) {
             case '{':
-                if (is_escaped) {
-                    advance();
-                    break;
-                } else {
-                    l.template_count++;
-                    advance();
-                    return new_token(is_template ? TOKEN_STRING : TOKEN_TEMPLATE_START);
-                }
+                l.template_count++;
+                advance();
+                return new_token(is_template ? TOKEN_STRING : TOKEN_TEMPLATE_START);
             case '\n': next_line(); break;
-            case '"':
-                if (is_escaped) advance();
-                break;
-            default: advance(); break;
+            case '"':  break;
+            default:   advance(); break;
         }
     }
     if (!match('"')) return error_token(loc, "Unterminated string");

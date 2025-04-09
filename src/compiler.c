@@ -378,8 +378,20 @@ static void string(UNUSED(bool can_assign)) {
         if (*cur_src == '\\') {
             cur_src++;
             length--;
+
+            assert(cur_src < end);
+            switch (*cur_src) {
+                case 'n': *cur_dst = '\n'; break;
+                case 'r': *cur_dst = '\r'; break;
+                case 't': *cur_dst = '\t'; break;
+                default:  *cur_dst = *cur_src; break;
+            }
+        } else {
+            *cur_dst = *cur_src;
         }
-        *(cur_dst++) = *(cur_src++);
+
+        cur_src++;
+        cur_dst++;
     }
 
     emit_constant(VALUE_OBJECT(copy_string(string, length)));
