@@ -231,7 +231,13 @@ static bool socket_read_callback(EpollData *epoll_data) {
         return false;
     }
 
-    fulfill_promise(data->promise, VALUE_OBJECT(finish_new_string(data->string, bytes)));
+    if (bytes == 0) {
+        // Return nil on closed connection.
+        fulfill_promise(data->promise, VALUE_NIL());
+    } else {
+        fulfill_promise(data->promise, VALUE_OBJECT(finish_new_string(data->string, bytes)));
+    }
+
     object_enable_gc((Object *) data->promise);
     object_enable_gc((Object *) data->string);
     vm_epoll_delete(epoll_data);
@@ -257,7 +263,12 @@ static bool socket_read(Value *result, Value *args) {
     ObjString *string = create_new_string(length);
     ssize_t bytes = read(fd, string->cstr, length);
     if (bytes != -1) {
-        fulfill_promise(promise, VALUE_OBJECT(finish_new_string(string, bytes)));
+        if (bytes == 0) {
+            // Return nil on closed connection.
+            fulfill_promise(promise, VALUE_NIL());
+        } else {
+            fulfill_promise(promise, VALUE_OBJECT(finish_new_string(string, bytes)));
+        }
         object_enable_gc((Object *) promise);
         return true;
     }
