@@ -1,10 +1,12 @@
 #include "native.h"
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <math.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
@@ -35,7 +37,7 @@ static bool sleep_(Value *result, Value *args) {
     double sleep_time_ms = args[0].as.number;
 
     Coroutine *sleeping = ll_remove(&vm.active_head, &vm.coroutine);
-    sleeping->sleep_time_ns = sleep_time_ms * 1000000L;
+    sleeping->sleep_time_ms = sleep_time_ms;
     ll_add_head(&vm.sleeping_head, sleeping);
 
     *result = VALUE_NIL();
@@ -51,7 +53,6 @@ static bool has_field(Value *result, Value *args) {
         runtime_error("The second argument must be a string");
         return false;
     }
-
     ObjInstance *instance = (ObjInstance *) args[0].as.object;
     ObjString *field = (ObjString *) args[1].as.object;
 
@@ -70,7 +71,6 @@ static bool get_field(Value *result, Value *args) {
         runtime_error("The second argument must be a string");
         return false;
     }
-
     ObjInstance *instance = (ObjInstance *) args[0].as.object;
     ObjString *field = (ObjString *) args[1].as.object;
 
@@ -90,7 +90,6 @@ static bool set_field(Value *result, Value *args) {
         runtime_error("The second argument must be a string");
         return false;
     }
-
     ObjInstance *instance = (ObjInstance *) args[0].as.object;
     ObjString *field = (ObjString *) args[1].as.object;
 
@@ -108,7 +107,6 @@ static bool delete_field(Value *result, Value *args) {
         runtime_error("The second argument must be a string");
         return false;
     }
-
     ObjInstance *instance = (ObjInstance *) args[0].as.object;
     ObjString *field = (ObjString *) args[1].as.object;
 
@@ -120,12 +118,17 @@ static bool delete_field(Value *result, Value *args) {
 static bool create_server(Value *result, UNUSED(Value *args)) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
-        runtime_error("Unable to create server: %s", strerror(errno));
+        runtime_error("Error in socket (%s)", strerror(errno));
         return false;
     }
 
     int optval = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+
+    if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
+        runtime_error("Error in fcntl (%s)", strerror(errno));
+        return false;
+    }
 
     *result = VALUE_NUMBER(fd);
     return true;
@@ -133,14 +136,13 @@ static bool create_server(Value *result, UNUSED(Value *args)) {
 
 static bool server_listen(Value *result, Value *args) {
     if (!check_int_arg(args[0], 0, INT32_MAX)) {
-        runtime_error("The first argument must be a server socket");
+        runtime_error("The first argument must be a server");
         return false;
     }
     if (!check_int_arg(args[1], 1, UINT16_MAX)) {
         runtime_error("The second argument is a port number, it must be an integer between 1 and 65535");
         return false;
     }
-
     int fd = (int) args[0].as.number;
     uint16_t port = (uint16_t) args[1].as.number;
 
@@ -149,13 +151,16 @@ static bool server_listen(Value *result, Value *args) {
         .sin_port = htons(port),
         .sin_addr.s_addr = INADDR_ANY,
     };
-
     if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) != 0) {
-        runtime_error("Error in bind: %s", strerror(errno));
+        if (errno == EADDRINUSE) {
+            runtime_error("Error in serverListen: the port is already taken");
+        } else {
+            runtime_error("Error in bind (%s)", strerror(errno));
+        }
         return false;
     }
     if (listen(fd, 64) != 0) {
-        runtime_error("Error in listen: %s", strerror(errno));
+        runtime_error("Error in listen (%s)", strerror(errno));
         return false;
     }
 
@@ -163,87 +168,108 @@ static bool server_listen(Value *result, Value *args) {
     return true;
 }
 
-static bool server_accept(Value *result, Value *args) {
-    if (!check_int_arg(args[0], 0, INT32_MAX)) {
-        runtime_error("The first argument must be a server socket");
+typedef struct {
+    ObjPromise *promise;
+} ServerAcceptData;
+
+static bool server_accept_callback(EpollData *epoll_data) {
+    ServerAcceptData *data = (void *) epoll_data->data;
+
+    int client_fd = accept(epoll_data->fd, NULL, NULL);
+    if (client_fd == -1) {
+        runtime_error("Error in accept:(%s)", strerror(errno));
+        return false;
+    }
+    if (fcntl(client_fd, F_SETFL, O_NONBLOCK) == -1) {
+        runtime_error("Error in fcntl (%s)", strerror(errno));
         return false;
     }
 
-    int server_fd = (int) args[0].as.number;
-    int connection_fd = accept(server_fd, NULL, NULL);
-    if (connection_fd == -1) {
-        runtime_error("Error in accept: %s", strerror(errno));
-        return false;
-    }
+    fulfill_promise(data->promise, VALUE_NUMBER(client_fd));
 
-    *result = VALUE_NUMBER(connection_fd);
+    object_enable_gc((Object *) data->promise);
     return true;
 }
 
-static bool read_(Value *result, Value *args) {
+static bool server_accept(Value *result, Value *args) {
     if (!check_int_arg(args[0], 0, INT32_MAX)) {
-        runtime_error("The first argument must be a file descriptor");
+        runtime_error("The first argument must be a server");
+        return false;
+    }
+    int server_fd = (int) args[0].as.number;
+
+    ObjPromise *promise = new_promise();
+    *result = VALUE_OBJECT(promise);
+
+    int client_fd = accept(server_fd, NULL, NULL);
+    if (client_fd != -1) {
+        fulfill_promise(promise, VALUE_NUMBER(client_fd));
+        return true;
+    }
+
+    ServerAcceptData *data = vm_epoll_add(server_fd, EPOLLIN, &server_accept_callback, sizeof(ServerAcceptData));
+    data->promise = promise;
+
+    object_disable_gc((Object *) promise);
+    return true;
+}
+
+typedef struct {
+    size_t length;
+    ObjString *string;
+    ObjPromise *promise;
+} SocketReadData;
+
+static bool socket_read_callback(EpollData *epoll_data) {
+    SocketReadData *data = (void *) epoll_data->data;
+
+    ssize_t bytes = read(epoll_data->fd, data->string->cstr, data->length);
+    if (bytes == -1) {
+        runtime_error("Error in read (%s)", strerror(errno));
+        return false;
+    }
+
+    fulfill_promise(data->promise, VALUE_OBJECT(finish_new_string(data->string, bytes)));
+
+    object_enable_gc((Object *) data->promise);
+    object_enable_gc((Object *) data->string);
+    return true;
+}
+
+static bool socket_read(Value *result, Value *args) {
+    if (!check_int_arg(args[0], 0, INT_MAX)) {
+        runtime_error("The first argument must be a socket");
         return false;
     }
     if (!check_int_arg(args[1], 0, SIZE_MAX)) {
         runtime_error("The second argument is length, it must be a positive integer.");
         return false;
     }
-
     int fd = (int) args[0].as.number;
     size_t length = (size_t) args[1].as.number;
 
+    ObjPromise *promise = new_promise();
+    object_disable_gc((Object *) promise);
+    *result = VALUE_OBJECT(promise);
+
     ObjString *string = create_new_string(length);
     ssize_t bytes = read(fd, string->cstr, length);
-    if (bytes == -1) {
-        runtime_error("Error in read: %s", strerror(errno));
-        return false;
+    if (bytes != -1) {
+        fulfill_promise(promise, VALUE_OBJECT(finish_new_string(string, bytes)));
+        object_enable_gc((Object *) promise);
+        return true;
     }
-    string->cstr[bytes] = '\0';
-    // Shorten the string up to `bytes`.
-    string->length = bytes;
-    finish_new_string(string);
 
-    *result = VALUE_OBJECT(string);
+    SocketReadData *data = vm_epoll_add(fd, EPOLLIN, &socket_read_callback, sizeof(SocketReadData));
+    data->length = length;
+    data->string = string;
+    data->promise = promise;
+
+    object_disable_gc((Object *) string);
     return true;
 }
 
-static bool write_(Value *result, Value *args) {
-    if (!check_int_arg(args[0], 0, INT32_MAX)) {
-        runtime_error("The first argument must be a file descriptor");
-        return false;
-    }
-    if (!is_object_type(args[1], OBJ_STRING)) {
-        runtime_error("The second argument must be a string");
-        return false;
-    }
 
-    int fd = (int) args[0].as.number;
-    ObjString *string = (ObjString *) args[1].as.object;
-
-    ssize_t bytes = write(fd, string->cstr, string->length);
-    if (bytes == -1) {
-        runtime_error("Error in write: %s", strerror(errno));
-        return false;
-    }
-
-    *result = VALUE_NIL();
-    return true;
-}
-
-static bool close_(Value *result, Value *args) {
-    if (!check_int_arg(args[0], 0, INT32_MAX)) {
-        runtime_error("The first argument must be a file descriptor");
-        return false;
-    }
-
-    int fd = (int) args[0].as.number;
-    if (close(fd) == -1) {
-        runtime_error("Unable to close: %s", strerror(errno));
-        return false;
-    }
-
-    *result = VALUE_NIL();
     return true;
 }
 
@@ -259,6 +285,9 @@ static NativeFunctionDef functions[] = {
     { "deleteField",   2,     delete_field  },
     // net
     { "createServer",  0,     create_server },
+    { "serverListen",  2,     server_listen },
+    { "serverAccept",  1,     server_accept },
+    { "socketRead",    2,     socket_read   },
     // clang-format on
 };
 

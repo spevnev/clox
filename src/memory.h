@@ -10,7 +10,7 @@
 #define GROW_CAPACITY(capacity, initial, factor) ((capacity) == 0 ? initial : (capacity) * factor)
 
 #define VEC_GROW_CAPACITY(capacity) GROW_CAPACITY((capacity), 16, 2)
-#define GREY_GROW_CAPACITY(capacity) GROW_CAPACITY((capacity), 128, 2)
+#define OBJECTS_GROW_CAPACITY(capacity) GROW_CAPACITY((capacity), 128, 2)
 
 // Initial size and grow factor must be powers of 2
 #define MAP_GROW_CAPACITY(capacity) GROW_CAPACITY((capacity), 64, 2)

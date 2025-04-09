@@ -38,16 +38,11 @@ const char *object_to_temp_cstr(const Object *object) {
             snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjBoundMethod *) object)->method->function->name->cstr);
             return CSTR;
         case OBJ_PROMISE: return "<Promise>";
-        case OBJ_SOCKET:  return "<Socket>";
         default:          UNREACHABLE();
     }
 }
 
 void free_object(Object *object) {
-#ifdef DEBUG_LOG_GC
-    printf("%p free type %d\n", (void *) object, object->type);
-#endif
-
     switch (object->type) {
         case OBJ_STRING: FREE(object, sizeof(ObjString) + ((ObjString *) object)->length + 1); break;
         case OBJ_FUNCTION:
@@ -72,7 +67,6 @@ void free_object(Object *object) {
         } break;
         case OBJ_BOUND_METHOD: FREE(object, sizeof(ObjBoundMethod)); break;
         case OBJ_PROMISE:      FREE(object, sizeof(ObjPromise)); break;
-        case OBJ_SOCKET:       FREE(object, sizeof(ObjSocket)); break;
         default:               UNREACHABLE();
     }
 }
@@ -80,6 +74,7 @@ void free_object(Object *object) {
 static Object *new_object(ObjectType type, uint32_t size) {
     Object *object = ALLOC(size);
     object->is_marked = false;
+    object->is_root = false;
     object->type = type;
     object->next = vm.objects;
     vm.objects = object;
@@ -156,12 +151,6 @@ ObjPromise *new_promise(void) {
     return promise;
 }
 
-ObjSocket *new_socket(int fd) {
-    ObjSocket *socket = (ObjSocket *) new_object(OBJ_SOCKET, sizeof(ObjSocket));
-    socket->fd = fd;
-    return socket;
-}
-
 ObjString *copy_string(const char *cstr, uint32_t length) {
     uint32_t hash = hash_string(cstr, length);
     ObjString *interned_string = hashmap_find_key(&vm.strings, cstr, length, hash);
@@ -206,21 +195,41 @@ ObjString *concat_strings(const ObjString *a, const ObjString *b) {
     return string;
 }
 
-ObjString *create_new_string(uint32_t length) {
-    ObjString *string = (ObjString *) new_object(OBJ_STRING, sizeof(ObjString) + length + 1);
-    string->cstr[length] = '\0';
-    string->length = length;
+ObjString *create_new_string(uint32_t capacity) {
+    assert(capacity > 0);
+    ObjString *string = (ObjString *) new_object(OBJ_STRING, sizeof(ObjString) + capacity + 1);
+    // Make it null-terminated to avoid segfault if its printed.
+    string->cstr[0] = '\0';
+    string->length = 0;
     return string;
 }
 
-ObjString *finish_new_string(ObjString *string) {
-    string->hash = hash_string(string->cstr, string->length);
+ObjString *finish_new_string(ObjString *string, uint32_t length) {
+    string->cstr[length] = '\0';
+    string->length = length;
+    string->hash = hash_string(string->cstr, length);
 
-    ObjString *interned_string = hashmap_find_key(&vm.strings, string->cstr, string->length, string->hash);
+    ObjString *interned_string = hashmap_find_key(&vm.strings, string->cstr, length, string->hash);
     if (interned_string != NULL) return interned_string;
 
     stack_push(VALUE_OBJECT(string));
     hashmap_set(&vm.strings, string, VALUE_NIL());
     stack_pop();
     return string;
+}
+
+void object_disable_gc(Object *object) {
+    assert(object->is_root == false);
+    if (vm.root_length >= vm.root_capacity) {
+        vm.root_capacity = OBJECTS_GROW_CAPACITY(vm.root_capacity);
+        vm.root_objects = realloc(vm.root_objects, sizeof(*vm.root_objects) * vm.root_capacity);
+        if (vm.root_objects == NULL) OUT_OF_MEMORY();
+    }
+    vm.root_objects[vm.root_length++] = object;
+    object->is_root = true;
+}
+
+void object_enable_gc(Object *object) {
+    assert(object->is_root == true);
+    object->is_root = false;
 }

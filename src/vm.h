@@ -1,6 +1,7 @@
 #ifndef CLOX_VM_H_
 #define CLOX_VM_H_
 
+#include <sys/epoll.h>
 #include "chunk.h"
 #include "compiler.h"
 #include "hashmap.h"
@@ -27,17 +28,29 @@ typedef struct Coroutine {
     struct Coroutine *prev;
     struct Coroutine *next;
     ObjPromise *promise;
-    uint64_t sleep_time_ns;
+    uint64_t sleep_time_ms;
     CallFrame *frame;
     Value *stack_top;
     CallFrame frames[CALLSTACK_SIZE];
     Value stack[STACK_SIZE];
 } Coroutine;
 
+struct EpollData;
+typedef bool (*EpollCallbackFn)(struct EpollData *data);
+
+typedef struct EpollData {
+    int fd;
+    Coroutine *creator;
+    EpollCallbackFn callback;
+    char data[];
+} EpollData;
+
 typedef struct {
     Coroutine *active_head;
     Coroutine *sleeping_head;
     Coroutine *coroutine;
+    int epoll_fd;
+    uint32_t epoll_count;
     // Set of interned strings (values are always null).
     HashMap strings;
     HashMap globals;
@@ -46,6 +59,9 @@ typedef struct {
     // Disabled while initializing VM.
     bool enable_gc;
     Object *objects;
+    uint32_t root_capacity;
+    uint32_t root_length;
+    Object **root_objects;
     uint32_t grey_capacity;
     uint32_t grey_length;
     Object **grey_objects;
@@ -63,6 +79,9 @@ Value stack_pop(void);
 Value stack_peek(uint32_t distance);
 void ll_add_head(Coroutine **head, Coroutine *coroutine);
 Coroutine *ll_remove(Coroutine **head, Coroutine **current);
+void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine);
+void fulfill_promise(ObjPromise *promise, Value value);
+void *vm_epoll_add(int fd, uint32_t epoll_events, EpollCallbackFn callback, size_t callback_data_size);
 InterpretResult interpret(const char *source);
 
 #endif  // CLOX_VM_H_

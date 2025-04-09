@@ -5,8 +5,10 @@
 #include <math.h>
 #include <stdarg.h>
 #include <string.h>
+#include <sys/epoll.h>
 #include <sys/time.h>
 #include <time.h>
+#include <unistd.h>
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
@@ -43,9 +45,9 @@ static void print_stacktrace(void) {
 #endif
 
 void runtime_error(const char *fmt, ...) {
-    Chunk *chunk = &vm.coroutine->frame->closure->function->chunk;
     va_list args;
     va_start(args, fmt);
+    Chunk *chunk = &vm.coroutine->frame->closure->function->chunk;
     error_varg(chunk->locs[vm.coroutine->frame->ip - chunk->code - 1], fmt, args);
     va_end(args);
     print_stacktrace();
@@ -75,6 +77,7 @@ Value stack_peek(uint32_t distance) {
 
 static Coroutine *new_coroutine(void) {
     Coroutine *coroutine = malloc(sizeof(*coroutine));
+    if (coroutine == NULL) OUT_OF_MEMORY();
     coroutine->prev = NULL;
     coroutine->next = NULL;
     coroutine->promise = new_promise();
@@ -244,7 +247,7 @@ static void close_upvalues(Value *value) {
     vm.open_upvalues = current;
 }
 
-static void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine) {
+void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine) {
     assert(promise->is_fulfilled == false);
 
     if (promise->data.coroutines.head == NULL) {
@@ -260,7 +263,7 @@ static void promise_add_coroutine(ObjPromise *promise, Coroutine *coroutine) {
     }
 }
 
-static void fulfill_promise(ObjPromise *promise, Value value) {
+void fulfill_promise(ObjPromise *promise, Value value) {
     assert(promise->is_fulfilled == false);
 
     // Merge waiting coroutines with active ones.
@@ -283,36 +286,77 @@ static void fulfill_promise(ObjPromise *promise, Value value) {
     }
 }
 
-#define NS_IN_SEC 1000000000L
-
-static uint64_t get_time_ns(void) {
+static uint64_t get_time_ms(void) {
     struct timespec ts;
-    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) PANIC("Unexpected error in clock_gettime: %s", strerror(errno));
-    return ts.tv_sec * NS_IN_SEC + ts.tv_nsec;
-}
-
-static void sleep_ns(uint64_t ns) {
-    struct timespec ts = {.tv_sec = ns / NS_IN_SEC, .tv_nsec = ns % NS_IN_SEC};
-    if (nanosleep(&ts, NULL) != 0) PANIC("Unexpected error in nanosleep: %s", strerror(errno));
+    if (clock_gettime(CLOCK_REALTIME, &ts) != 0) PANIC("Error in clock_gettime: %s", strerror(errno));
+    return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
 }
 
 // Updates timers on all sleeping coroutines, wakes up if the timer has finished.
-// Returns the minimum timer in nanoseconds.
-static uint64_t update_sleeping_coroutines(uint64_t time_diff_ns) {
-    uint64_t min_wait_ns = UINT64_MAX;
+// Returns the minimum timer in miliseconds.
+static uint64_t update_sleeping_coroutines(uint64_t time_diff_ms) {
+    uint64_t min_wait_ms = UINT64_MAX;
     Coroutine *current = vm.sleeping_head;
     while (current != NULL) {
-        if (current->sleep_time_ns <= time_diff_ns) {
+        if (current->sleep_time_ms <= time_diff_ms) {
             Coroutine *removed = ll_remove(&vm.sleeping_head, &current);
             ll_add_head(&vm.active_head, removed);
         } else {
-            current->sleep_time_ns -= time_diff_ns;
-            if (current->sleep_time_ns < min_wait_ns) min_wait_ns = current->sleep_time_ns;
+            current->sleep_time_ms -= time_diff_ms;
+            if (current->sleep_time_ms < min_wait_ms) min_wait_ms = current->sleep_time_ms;
 
             current = current->next;
         }
     }
-    return min_wait_ns;
+    return min_wait_ms;
+}
+
+void *vm_epoll_add(int fd, uint32_t epoll_events, EpollCallbackFn callback, size_t callback_data_size) {
+    EpollData *epoll_data = malloc(sizeof(*epoll_data) + callback_data_size);
+    if (epoll_data == NULL) OUT_OF_MEMORY();
+    epoll_data->fd = fd;
+    epoll_data->creator = vm.coroutine;
+    epoll_data->callback = callback;
+
+    struct epoll_event event = {
+        .events = epoll_events | EPOLLONESHOT,
+        .data.ptr = epoll_data,
+    };
+    if (epoll_ctl(vm.epoll_fd, EPOLL_CTL_ADD, fd, &event) != 0) PANIC("Error in epoll_ctl: %s", strerror(errno));
+
+    vm.epoll_count++;
+    return epoll_data->data;
+}
+
+static void vm_epoll_delete(EpollData *epoll_data) {
+    if (epoll_ctl(vm.epoll_fd, EPOLL_CTL_DEL, epoll_data->fd, NULL) != 0) {
+        PANIC("Error in epoll_ctl: %s", strerror(errno));
+    }
+    vm.epoll_count--;
+    free(epoll_data);
+}
+
+// Checks epoll for events and executes callbacks that may wake up coroutines.
+static bool update_polling(uint64_t ms) {
+    const int max_events = 16;
+    struct epoll_event events[max_events];
+
+    int events_num = epoll_wait(vm.epoll_fd, events, max_events, ms);
+    if (events_num == -1) PANIC("Error in epoll_wait: %s", strerror(errno));
+
+    for (int i = 0; i < events_num; i++) {
+        EpollData *epoll_data = events[i].data.ptr;
+
+        // Set current coroutine to the one that created the event for the callback.
+        Coroutine *current = vm.coroutine;
+        vm.coroutine = epoll_data->creator;
+        if (!epoll_data->callback(epoll_data)) return false;
+        vm.coroutine = current;
+
+        vm_epoll_delete(epoll_data);
+    }
+
+    return true;
 }
 
 static InterpretResult run(void) {
@@ -346,22 +390,25 @@ static InterpretResult run(void) {
         stack_push(value_type(a op b));                                                                  \
     } while (0)
 
-    uint64_t time_ns = get_time_ns();
+    uint64_t time_ms = get_time_ms();
     for (;;) {
         // After iteration over all active coroutines, check the sleeping ones.
         if (vm.coroutine == NULL) {
-            uint64_t new_time_ns = get_time_ns();
-            // TODO: Accumulate time difference and only update once min_wait_ns has passed.
-            uint64_t min_wait_ns = update_sleeping_coroutines(new_time_ns - time_ns);
-            time_ns = new_time_ns;
+            uint64_t new_time_ms = get_time_ms();
+            // TODO: Accumulate time difference and only update once min_wait_ms has passed.
+            uint64_t min_wait_ms = update_sleeping_coroutines(new_time_ms - time_ms);
+            time_ms = new_time_ms;
+
+            // Check IO events without blocking.
+            if (!update_polling(0)) return RESULT_RUNTIME_ERROR;
 
             // There are no active coroutines.
             if (vm.active_head == NULL) {
-                // There are no sleeping coroutines.
-                if (min_wait_ns == UINT64_MAX) return RESULT_OK;
+                // There are no sleeping and no polling coroutines.
+                if (min_wait_ms == UINT64_MAX && vm.epoll_count == 0) return RESULT_OK;
 
-                // Sleep until the next sleeping coroutine wakes up.
-                sleep_ns(min_wait_ns);
+                // Block until sleeping coroutine wakes up, or IO event happens.
+                if (!update_polling(min_wait_ms)) return RESULT_RUNTIME_ERROR;
                 continue;
             }
 
@@ -452,7 +499,7 @@ static InterpretResult run(void) {
                     current += length;
                 }
                 stack_popn(parts);
-                stack_push(VALUE_OBJECT(finish_new_string(string)));
+                stack_push(VALUE_OBJECT(finish_new_string(string, length)));
             } break;
             case OP_JUMP: {
                 uint16_t offset = READ_U16();
@@ -697,6 +744,8 @@ static InterpretResult run(void) {
 
 void init_vm(void) {
     vm.coroutine = vm.active_head = new_coroutine();
+    vm.epoll_fd = epoll_create1(0);
+    if (vm.epoll_fd == -1) PANIC("Error in epoll_create: %s", strerror(errno));
     vm.next_gc = GC_INITIAL_THRESHOLD;
     vm.init_string = copy_string("init", 4);
 
@@ -704,6 +753,8 @@ void init_vm(void) {
 }
 
 void free_vm(void) {
+    close(vm.epoll_fd);
+    free(vm.root_objects);
     free(vm.grey_objects);
     free_hashmap(&vm.strings);
     free_hashmap(&vm.globals);

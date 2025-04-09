@@ -38,7 +38,7 @@ void mark_object(Object *object) {
     }
 
     if (vm.grey_length >= vm.grey_capacity) {
-        vm.grey_capacity = GREY_GROW_CAPACITY(vm.grey_capacity);
+        vm.grey_capacity = OBJECTS_GROW_CAPACITY(vm.grey_capacity);
         vm.grey_objects = realloc(vm.grey_objects, sizeof(*vm.grey_objects) * vm.grey_capacity);
         if (vm.grey_objects == NULL) OUT_OF_MEMORY();
     }
@@ -71,6 +71,19 @@ static void mark_vm_roots(void) {
 
     for (ObjUpvalue *upvalue = vm.open_upvalues; upvalue != NULL; upvalue = upvalue->next) {
         mark_object((Object *) upvalue);
+    }
+
+    uint32_t i = 0;
+    while (i < vm.root_length) {
+        Object *object = vm.root_objects[i];
+        if (object->is_root) {
+            mark_object(object);
+            i++;
+        } else {
+            // Remove from the array by swapping with the last element and popping it.
+            if (i < vm.root_length - 1) vm.root_objects[i] = vm.root_objects[vm.root_length - 1];
+            vm.root_length--;
+        }
     }
 }
 
@@ -123,7 +136,7 @@ static void trace_object(Object *object) {
                 mark_object((Object *) current);
             }
         } break;
-        default:         UNREACHABLE();
+        default: UNREACHABLE();
     }
 }
 

@@ -16,11 +16,11 @@ typedef enum {
     OBJ_INSTANCE,
     OBJ_BOUND_METHOD,
     OBJ_PROMISE,
-    OBJ_SOCKET,
 } ObjectType;
 
 typedef struct Object {
     bool is_marked;
+    bool is_root;
     ObjectType type;
     struct Object *next;
 } Object;
@@ -99,11 +99,6 @@ typedef struct ObjPromise {
     } data;
 } ObjPromise;
 
-typedef struct {
-    Object object;
-    int fd;
-} ObjSocket;
-
 #ifdef INLINE_CACHING
 typedef uint16_t cache_id_t;
 #define CACHE_ID_MAX UINT16_MAX
@@ -122,16 +117,18 @@ ObjClass *new_class(ObjString *name);
 ObjInstance *new_instance(ObjClass *class);
 ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method);
 ObjPromise *new_promise(void);
-ObjSocket *new_socket(int fd);
 ObjString *copy_string(const char *cstr, uint32_t length);
 ObjString *concat_strings(const ObjString *a, const ObjString *b);
-
 // Create a new string of the given length for callee to fill `cstr`.
-// After filling in the entire length, callee must `finish_new_string`.
-ObjString *create_new_string(uint32_t length);
-// Finishes string creation by setting hash and interning it.
+// After filling in, callee must `finish_new_string`.
+ObjString *create_new_string(uint32_t capacity);
+// Finishes string creation by setting length, hash and interning it.
 // Returns interned string or the same one.
-ObjString *finish_new_string(ObjString *string);
+ObjString *finish_new_string(ObjString *string, uint32_t length);
+// Prevents GC from freeing it by adding to the list of `root_objects`.
+void object_disable_gc(Object *object);
+// Clears `is_root` flag to mark for removal from `root_objects` on the next GC.
+void object_enable_gc(Object *object);
 
 static inline bool is_object_type(Value value, ObjectType type) {
     return value.type == VAL_OBJECT && value.as.object->type == type;
