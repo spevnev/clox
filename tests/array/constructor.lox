@@ -1,0 +1,1 @@
+Array(); // [ERROR] Function 'Array' expected 2 arguments but got 0 at 1:7.

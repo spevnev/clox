@@ -1,0 +1,10 @@
+/// Array should be passed by reference, i.e. function will modify same array.
+fun set(arr, i, value) {
+    arr[i] = value;
+}
+
+var arr = Array(3, nil);
+print arr; // [nil, nil, nil]
+set(arr, 0, 1);
+set(arr, 2, 3);
+print arr; // [1, nil, 3]

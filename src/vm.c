@@ -423,6 +423,31 @@ static InterpretResult run(void) {
         double a = stack_pop().as.number;                                                                \
         stack_push(value_type(a op b));                                                                  \
     } while (0)
+#define ARRAY_UNARY_OP(op)                                                                                       \
+    do {                                                                                                         \
+        if (!check_int_arg(stack_peek(0), 0, UINT32_MAX)) {                                                      \
+            runtime_error("Index must be a positive integer but found '%s'", value_to_temp_cstr(stack_peek(0))); \
+            return RESULT_RUNTIME_ERROR;                                                                         \
+        }                                                                                                        \
+        uint32_t index = (uint32_t) stack_pop().as.number;                                                       \
+        Value array_value = stack_pop();                                                                         \
+        if (!is_object_type(array_value, OBJ_ARRAY)) {                                                           \
+            runtime_error("Expected an array but found '%s'", value_to_temp_cstr(array_value));                  \
+            return RESULT_RUNTIME_ERROR;                                                                         \
+        }                                                                                                        \
+        ObjArray *array = (ObjArray *) array_value.as.object;                                                    \
+        if (index >= array->length) {                                                                            \
+            runtime_error("Index out of bounds");                                                                \
+            return RESULT_RUNTIME_ERROR;                                                                         \
+        }                                                                                                        \
+        Value element = array->elements[index];                                                                  \
+        if (element.type != VAL_NUMBER) {                                                                        \
+            runtime_error("Operand must be a number but found '%s'", value_to_temp_cstr(element));               \
+            return RESULT_RUNTIME_ERROR;                                                                         \
+        }                                                                                                        \
+        array->elements[index].as.number op;                                                                     \
+        stack_push(element);                                                                                     \
+    } while (0)
 
 #define SCHEDULE_COROUTINE()                           \
     if (vm.coroutine == NULL) {                        \
@@ -750,7 +775,68 @@ static InterpretResult run(void) {
                     SCHEDULE_COROUTINE();
                 }
             } break;
-            default: UNREACHABLE();
+            case OP_ARRAY: {
+                uint32_t elements = READ_U8();
+                ObjArray *array = new_array(elements, VALUE_NIL());
+                stack_popn(elements);
+                memcpy(array->elements, vm.coroutine->stack_top, elements * sizeof(*array->elements));
+                stack_push(VALUE_OBJECT(array));
+            } break;
+            case OP_ARRAY_GET: {
+                if (!check_int_arg(stack_peek(0), 0, UINT32_MAX)) {
+                    runtime_error("Index must be a positive integer but found '%s'", value_to_temp_cstr(stack_peek(0)));
+                    return RESULT_RUNTIME_ERROR;
+                }
+                uint32_t index = (uint32_t) stack_pop().as.number;
+
+                Value value = stack_pop();
+                if (is_object_type(value, OBJ_ARRAY)) {
+                    ObjArray *array = (ObjArray *) value.as.object;
+                    if (index >= array->length) {
+                        runtime_error("Index out of bounds");
+                        return RESULT_RUNTIME_ERROR;
+                    }
+
+                    stack_push(array->elements[index]);
+                } else if (is_object_type(value, OBJ_STRING)) {
+                    ObjString *string = (ObjString *) value.as.object;
+                    if (index >= string->length) {
+                        runtime_error("Index out of bounds");
+                        return RESULT_RUNTIME_ERROR;
+                    }
+
+                    stack_push(VALUE_OBJECT(copy_string(&string->cstr[index], 1)));
+                } else {
+                    runtime_error("Expected an array or a string but found '%s'", value_to_temp_cstr(value));
+                    return RESULT_RUNTIME_ERROR;
+                }
+            } break;
+            case OP_ARRAY_SET: {
+                Value value = stack_pop();
+
+                if (!check_int_arg(stack_peek(0), 0, UINT32_MAX)) {
+                    runtime_error("Index must be a positive integer but found '%s'", value_to_temp_cstr(stack_peek(0)));
+                    return RESULT_RUNTIME_ERROR;
+                }
+                uint32_t index = (uint32_t) stack_pop().as.number;
+
+                Value array_value = stack_pop();
+                if (!is_object_type(array_value, OBJ_ARRAY)) {
+                    runtime_error("Expected an array but found '%s'", value_to_temp_cstr(array_value));
+                    return RESULT_RUNTIME_ERROR;
+                }
+                ObjArray *array = (ObjArray *) array_value.as.object;
+
+                if (index >= array->length) {
+                    runtime_error("Index out of bounds");
+                    return RESULT_RUNTIME_ERROR;
+                }
+                array->elements[index] = value;
+                stack_push(value);
+            } break;
+            case OP_ARRAY_INCR: ARRAY_UNARY_OP(++); break;
+            case OP_ARRAY_DECR: ARRAY_UNARY_OP(--); break;
+            default:            UNREACHABLE();
         }
     }
 
@@ -760,6 +846,7 @@ static InterpretResult run(void) {
 #undef READ_STRING
 #undef UNARY_OP
 #undef BINARY_OP
+#undef ARRAY_UNARY_OP
 #undef SCHEDULE_COROUTINE
 }
 

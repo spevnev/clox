@@ -2,7 +2,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <math.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,14 +14,6 @@
 #include "object.h"
 #include "value.h"
 #include "vm.h"
-
-static bool check_int_arg(Value arg, double min, double max) {
-    if (arg.type != VAL_NUMBER) return false;
-
-    double temp;
-    double number = arg.as.number;
-    return (min <= number && number <= max) && modf(number, &temp) == 0.0;
-}
 
 static bool clock_(Value *result, UNUSED(Value *args)) {
     *result = VALUE_NUMBER((double) clock() / CLOCKS_PER_SEC);
@@ -252,7 +243,7 @@ static bool socket_read(Value *result, Value *args) {
         runtime_error("The first argument must be a socket");
         return false;
     }
-    if (!check_int_arg(args[1], 0, SIZE_MAX)) {
+    if (!check_int_arg(args[1], 1, SIZE_MAX)) {
         runtime_error("The second argument is length, it must be a positive integer.");
         return false;
     }
@@ -368,15 +359,30 @@ static bool socket_close(Value *result, Value *args) {
     return true;
 }
 
-static bool string_length(Value *result, Value *args) {
-    if (!is_object_type(args[0], OBJ_STRING)) {
-        runtime_error("The first argument must be a string");
+static bool create_array(Value *result, Value *args) {
+    if (!check_int_arg(args[0], 0, UINT32_MAX)) {
+        runtime_error("The first argument is length, it must be a non-negative integer");
         return false;
     }
-    ObjString *string = (ObjString *) args[0].as.object;
+    uint32_t size = (uint32_t) args[0].as.number;
 
-    *result = VALUE_NUMBER(string->length);
+    *result = VALUE_OBJECT(new_array(size, args[1]));
     return true;
+}
+
+static bool length(Value *result, Value *args) {
+    if (is_object_type(args[0], OBJ_STRING)) {
+        ObjString *string = (ObjString *) args[0].as.object;
+        *result = VALUE_NUMBER(string->length);
+        return true;
+    } else if (is_object_type(args[0], OBJ_ARRAY)) {
+        ObjArray *array = (ObjArray *) args[0].as.object;
+        *result = VALUE_NUMBER(array->length);
+        return true;
+    } else {
+        runtime_error("The first argument must be an array or a string");
+        return false;
+    }
 }
 
 static NativeFunctionDef functions[] = {
@@ -396,8 +402,9 @@ static NativeFunctionDef functions[] = {
     { "socketRead",    2,     socket_read   },
     { "socketWrite",   2,     socket_write  },
     { "socketClose",   1,     socket_close  },
-    // string
-    { "stringLength",  1,     string_length },
+    // array
+    { "Array",         2,     create_array  },
+    { "length",        1,     length        },
     // clang-format on
 };
 

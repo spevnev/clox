@@ -1,0 +1,1 @@
+Array(-1, nil); // [ERROR] The first argument is length, it must be a non-negative integer at 1:14.

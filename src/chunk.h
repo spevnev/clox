@@ -50,6 +50,11 @@ typedef enum {
     OP_SUPER_INVOKE,
     OP_YIELD,
     OP_AWAIT,
+    OP_ARRAY,
+    OP_ARRAY_GET,
+    OP_ARRAY_SET,
+    OP_ARRAY_INCR,
+    OP_ARRAY_DECR
 } OpCode;
 
 typedef struct {
@@ -64,6 +69,8 @@ typedef struct {
     Loc *locs;
     ValueVec constants;
 } Chunk;
+
+#define MAX_OPERAND UINT8_MAX
 
 void free_chunk(Chunk *chunk);
 void push_byte(Chunk *chunk, uint8_t byte, Loc loc);

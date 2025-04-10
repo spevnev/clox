@@ -191,6 +191,8 @@ Token next_token(void) {
     switch (c) {
         case '(': return new_token(TOKEN_LEFT_PAREN);
         case ')': return new_token(TOKEN_RIGHT_PAREN);
+        case '[': return new_token(TOKEN_LEFT_BRACKET);
+        case ']': return new_token(TOKEN_RIGHT_BRACKET);
         case '{': return new_token(TOKEN_LEFT_BRACE);
         case '}':
             if (l.template_count > 0) {

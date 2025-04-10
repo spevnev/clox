@@ -1,0 +1,2 @@
+var arr = Array(0, nil);
+arr[1] = 123; // [ERROR] Index out of bounds at 2:10.

@@ -21,7 +21,7 @@ typedef enum {
     PREC_TERM,         // + -
     PREC_FACTOR,       // * /
     PREC_UNARY,        // ! -
-    PREC_CALL,         // . ()
+    PREC_CALL,         // . () []
 } Precedence;
 
 typedef struct {
@@ -350,8 +350,8 @@ static uint8_t args(void) {
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
             expression();
-            if (arg_num == MAX_ARITY) {
-                error_prev("Function call has too many arguments (max is %d)", MAX_ARITY);
+            if (arg_num == MAX_OPERAND) {
+                error_prev("Function call has too many arguments (max is %d)", MAX_OPERAND);
                 p.is_panicking = true;
             }
             arg_num++;
@@ -438,6 +438,22 @@ static void grouping(UNUSED(bool can_assign)) {
     expect(TOKEN_RIGHT_PAREN, "Unclosed '(', expected ')' after expression");
 }
 
+static void array(UNUSED(bool can_assign)) {
+    uint32_t elements = 0;
+    if (!is_next(TOKEN_RIGHT_BRACKET)) {
+        do {
+            expression();
+            if (elements == MAX_OPERAND) {
+                error_prev("Array literal has too many elements (max is %d)", MAX_OPERAND);
+                p.is_panicking = true;
+            }
+            elements++;
+        } while (match(TOKEN_COMMA));
+    }
+    expect(TOKEN_RIGHT_BRACKET, "Unclosed '[', expected ']' after array literal");
+    emit_byte2(OP_ARRAY, elements);
+}
+
 static void unary(UNUSED(bool can_assign)) {
     TokenType op = p.previous.type;
 
@@ -505,6 +521,25 @@ static void conditional(UNUSED(bool can_assign)) {
 }
 
 static void call(UNUSED(bool can_assign)) { emit_byte2(OP_CALL, args()); }
+
+static void index(bool can_assign) {
+    expression();
+    expect(TOKEN_RIGHT_BRACKET, "Unclosed '[', expected ']' after index");
+
+    if (can_assign && match(TOKEN_EQUAL)) {
+        expression();
+        emit_byte(OP_ARRAY_SET);
+    } else if (match(TOKEN_PLUS_PLUS)) {
+        // incr/decr cannot be efficiently implemented using other instructions
+        // because array get/set consume array instance, which cannot be dupped
+        // because it is not on top of the stack, it is under index.
+        emit_byte(OP_ARRAY_INCR);
+    } else if (match(TOKEN_MINUS_MINUS)) {
+        emit_byte(OP_ARRAY_DECR);
+    } else {
+        emit_byte(OP_ARRAY_GET);
+    }
+}
 
 static void dot(bool can_assign) {
     expect(TOKEN_IDENTIFIER, "Expected field after '.'");
@@ -591,6 +626,7 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_OR]             = { NULL,     or_,         PREC_OR          },
     [TOKEN_QUESTION]       = { NULL,     conditional, PREC_CONDITIONAL },
     [TOKEN_LEFT_PAREN]     = { grouping, call,        PREC_CALL        },
+    [TOKEN_LEFT_BRACKET]   = { array,    index,       PREC_CALL        },
     [TOKEN_DOT]            = { NULL,     dot,         PREC_CALL        },
     // clang-format on
 };
@@ -1015,8 +1051,8 @@ static void function(FunctionType type) {
     expect(TOKEN_LEFT_PAREN, "Expected '(' after function name");
     if (!is_next(TOKEN_RIGHT_PAREN)) {
         do {
-            if (c->function->arity == MAX_ARITY) {
-                error_prev("Function has too many parameters (max is %d)", MAX_ARITY);
+            if (c->function->arity == MAX_OPERAND) {
+                error_prev("Function has too many parameters (max is %d)", MAX_OPERAND);
                 p.is_panicking = true;
             }
             c->function->arity++;

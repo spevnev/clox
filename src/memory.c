@@ -136,6 +136,10 @@ static void trace_object(Object *object) {
                 mark_object((Object *) current);
             }
         } break;
+        case OBJ_ARRAY: {
+            ObjArray *array = (ObjArray *) object;
+            for (uint32_t i = 0; i < array->length; i++) mark_value(&array->elements[i]);
+        } break;
         default: UNREACHABLE();
     }
 }

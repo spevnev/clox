@@ -18,27 +18,70 @@ cache_id_t next_id(void) {
 #endif
 
 const char *object_to_temp_cstr(const Object *object) {
-    static char CSTR[1024];
+    static char BUFFER[1024];
+    const size_t MAX_LEN = sizeof(BUFFER) / sizeof(*BUFFER);
 
     switch (object->type) {
-        case OBJ_STRING: return ((const ObjString *) object)->cstr;
-        case OBJ_FUNCTION:
-            snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjFunction *) object)->name->cstr);
-            return CSTR;
-        case OBJ_UPVALUE: return "upvalue";
-        case OBJ_CLOSURE:
-            snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjClosure *) object)->function->name->cstr);
-            return CSTR;
-        case OBJ_NATIVE: snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjNative *) object)->name); return CSTR;
-        case OBJ_CLASS:  return ((const ObjClass *) object)->name->cstr;
-        case OBJ_INSTANCE:
-            snprintf(CSTR, sizeof(CSTR), "%s instance", ((const ObjInstance *) object)->class->name->cstr);
-            return CSTR;
-        case OBJ_BOUND_METHOD:
-            snprintf(CSTR, sizeof(CSTR), "<fn %s>", ((const ObjBoundMethod *) object)->method->function->name->cstr);
-            return CSTR;
-        case OBJ_PROMISE: return "<Promise>";
-        default:          UNREACHABLE();
+        case OBJ_UPVALUE:  return "upvalue";
+        case OBJ_PROMISE:  return "<Promise>";
+        case OBJ_STRING:   return ((const ObjString *) object)->cstr;
+        case OBJ_CLASS:    return ((const ObjClass *) object)->name->cstr;
+        case OBJ_FUNCTION: {
+            snprintf(BUFFER, MAX_LEN, "<fn %s>", ((const ObjFunction *) object)->name->cstr);
+            return BUFFER;
+        }
+        case OBJ_CLOSURE: {
+            snprintf(BUFFER, MAX_LEN, "<fn %s>", ((const ObjClosure *) object)->function->name->cstr);
+            return BUFFER;
+        }
+        case OBJ_NATIVE: {
+            snprintf(BUFFER, MAX_LEN, "<fn %s>", ((const ObjNative *) object)->name);
+            return BUFFER;
+        }
+        case OBJ_INSTANCE: {
+            snprintf(BUFFER, MAX_LEN, "%s instance", ((const ObjInstance *) object)->class->name->cstr);
+            return BUFFER;
+        }
+        case OBJ_BOUND_METHOD: {
+            snprintf(BUFFER, MAX_LEN, "<fn %s>", ((const ObjBoundMethod *) object)->method->function->name->cstr);
+            return BUFFER;
+        }
+        case OBJ_ARRAY: {
+            ObjArray *array = (ObjArray *) object;
+
+            char array_buffer[MAX_LEN];
+            char *c = array_buffer;
+            size_t length = 3;
+
+            *(c++) = '[';
+            for (uint32_t i = 0; i < array->length; i++) {
+                if (i > 0) {
+                    length += 2;
+                    *(c++) = ',';
+                    *(c++) = ' ';
+                }
+
+                const char *value_cstr = value_to_temp_cstr(array->elements[i]);
+                size_t value_length = strlen(value_cstr);
+
+                if (length + value_length + 5 >= MAX_LEN) {
+                    length += 3;
+                    *(c++) = '.';
+                    *(c++) = '.';
+                    *(c++) = '.';
+                } else {
+                    memcpy(c, value_cstr, value_length);
+                    length += value_length;
+                    c += value_length;
+                }
+            }
+            *(c++) = ']';
+            *c = '\0';
+
+            memcpy(BUFFER, array_buffer, length);
+            return BUFFER;
+        }
+        default: UNREACHABLE();
     }
 }
 
@@ -67,7 +110,11 @@ void free_object(Object *object) {
         } break;
         case OBJ_BOUND_METHOD: FREE(object, sizeof(ObjBoundMethod)); break;
         case OBJ_PROMISE:      FREE(object, sizeof(ObjPromise)); break;
-        default:               UNREACHABLE();
+        case OBJ_ARRAY:        {
+            ObjArray *array = (ObjArray *) object;
+            FREE(object, sizeof(ObjArray) + sizeof(*array->elements) * array->length);
+        } break;
+        default: UNREACHABLE();
     }
 }
 
@@ -149,6 +196,13 @@ ObjPromise *new_promise(void) {
     promise->data.coroutines.head = NULL;
     promise->data.coroutines.tail = NULL;
     return promise;
+}
+
+ObjArray *new_array(uint32_t size, Value fill_value) {
+    ObjArray *array = (ObjArray *) new_object(OBJ_ARRAY, sizeof(ObjArray) + size * sizeof(Value));
+    array->length = size;
+    for (uint32_t i = 0; i < size; i++) array->elements[i] = fill_value;
+    return array;
 }
 
 ObjString *copy_string(const char *cstr, uint32_t length) {

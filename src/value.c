@@ -1,9 +1,18 @@
 #include "value.h"
+#include <math.h>
 #include <string.h>
 #include "common.h"
 #include "error.h"
 #include "memory.h"
 #include "object.h"
+
+bool check_int_arg(Value arg, double min, double max) {
+    if (arg.type != VAL_NUMBER) return false;
+
+    double temp;
+    double number = arg.as.number;
+    return (min <= number && number <= max) && modf(number, &temp) == 0.0;
+}
 
 const char *value_to_temp_cstr(Value value) {
     static char CSTR[1024];

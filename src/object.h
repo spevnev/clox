@@ -16,6 +16,7 @@ typedef enum {
     OBJ_INSTANCE,
     OBJ_BOUND_METHOD,
     OBJ_PROMISE,
+    OBJ_ARRAY,
 } ObjectType;
 
 typedef struct Object {
@@ -31,8 +32,6 @@ typedef struct ObjString {
     uint32_t length;
     char cstr[];
 } ObjString;
-
-#define MAX_ARITY UINT8_MAX
 
 typedef struct {
     Object object;
@@ -99,6 +98,12 @@ typedef struct ObjPromise {
     } data;
 } ObjPromise;
 
+typedef struct {
+    Object object;
+    uint32_t length;
+    Value elements[];
+} ObjArray;
+
 #ifdef INLINE_CACHING
 typedef uint16_t cache_id_t;
 #define CACHE_ID_MAX UINT16_MAX
@@ -117,6 +122,7 @@ ObjClass *new_class(ObjString *name);
 ObjInstance *new_instance(ObjClass *class);
 ObjBoundMethod *new_bound_method(Value instance, ObjClosure *method);
 ObjPromise *new_promise(void);
+ObjArray *new_array(uint32_t size, Value fill_value);
 ObjString *copy_string(const char *cstr, uint32_t length);
 ObjString *concat_strings(const ObjString *a, const ObjString *b);
 // Create a new string of the given length for callee to fill `cstr`.

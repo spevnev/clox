@@ -4,9 +4,9 @@
 #include "common.h"
 #include "object.h"
 
-#define CONSTANTS_SIZE (UINT8_MAX + 1)
-#define LOCALS_SIZE (UINT8_MAX + 1)
-#define UPVALUES_SIZE (UINT8_MAX + 1)
+#define CONSTANTS_SIZE (MAX_OPERAND + 1)
+#define LOCALS_SIZE (MAX_OPERAND + 1)
+#define UPVALUES_SIZE (MAX_OPERAND + 1)
 
 ObjFunction *compile(const char *source);
 void mark_compiler_roots(void);

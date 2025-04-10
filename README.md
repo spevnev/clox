@@ -69,6 +69,18 @@ The implementation has additional features, mainly coroutines, which are not par
     print a;   // 6
     ```
 
+- arrays
+    ```js
+    // Array constructor
+    var arr = Array(3, 0);
+    arr[1] = 5;
+    print arr; // [0, 5, 0]
+
+    // Array literals
+    var lit = [1, [2, 3], [], [4]];
+    print lit[1][1]; // 3
+    ```
+
 ## Native functions
 
 | Name         | Arguments            | Description |
@@ -85,3 +97,4 @@ The implementation has additional features, mainly coroutines, which are not par
 | socketRead   | socket, max length   | Return a promise of string of at most max length, that will be resolved when it reads from client. |
 | socketWrite  | socket, string       | Returns a promise that will be resolved once the entirety of string has been written. |
 | socketClose  | socket               | Closes client socket. |
+| length       | string or array      | Returns the length of string or array. |

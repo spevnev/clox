@@ -1,0 +1,2 @@
+var arr = Array(3, nil);
+print arr[-1]; // [ERROR] Index must be a positive integer but found '-1' at 2:13.
