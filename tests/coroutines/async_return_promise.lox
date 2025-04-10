@@ -1,0 +1,12 @@
+/// Test that f2 returns a single promise, instead of a putting f1's promise into another promise.
+
+async fun f1(c) { return c; }
+async fun f2() {
+    var p = f1(5);
+    print p; // <Promise>
+    return p;
+}
+
+var p = f2();
+print p; // <Promise>
+print await p; // 5

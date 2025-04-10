@@ -1,0 +1,12 @@
+async fun delayedPrint(t, i) {
+    sleep(t);
+    print i;
+}
+
+delayedPrint(150, 100);
+for (var i = 0;i < 3;i++) delayedPrint(i * 100, i);
+
+// 0
+// 1
+// 100
+// 2

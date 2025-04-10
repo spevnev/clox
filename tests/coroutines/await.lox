@@ -1,0 +1,5 @@
+async fun constant(v) { return v; }
+
+var c = constant(5);
+print c; // <Promise>
+print await c; // 5

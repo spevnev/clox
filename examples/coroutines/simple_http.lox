@@ -1,0 +1,23 @@
+// HTTP server that sends hardcoded response.
+
+var port = 3000;
+
+var server = createServer();
+serverListen(server, port);
+print "Listening on port {port}";
+
+var counter = 0;
+async fun handleClient(client) {
+    var content = "Hello #{counter++}, client {client}!";
+
+    await socketWrite(client, "
+HTTP/1.1 200 OK
+Content-Length: {stringLength(content)}
+Content-Type: text/plain; charset=utf-8
+
+{content}
+");
+    socketClose(client);
+}
+
+while (true) handleClient(await serverAccept(server));

@@ -1,0 +1,22 @@
+async fun task1() {
+    print "Start task1";
+    yield;
+    sleep(200);
+    print "End task1";
+}
+
+async fun task2() {
+    print "Start task2";
+    yield;
+    print "End task2";
+}
+
+task1();
+task2();
+print "Called task1 and task2";
+
+// Start task1
+// Start task2
+// Called task1 and task2
+// End task2
+// End task1

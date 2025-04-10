@@ -24,7 +24,6 @@ typedef struct {
     Value *slots;
 } CallFrame;
 
-// TODO: Reduce size
 typedef struct Coroutine {
     struct Coroutine *prev;
     struct Coroutine *next;

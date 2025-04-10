@@ -1,0 +1,28 @@
+// TCP echo server
+
+async fun handleClient(clientSocket) {
+    while (true) {
+        var message = await socketRead(clientSocket, 1024);
+
+        // Client closed the connection.
+        if (message == nil) return;
+
+        print "Client's message: {message}";
+        if (message == "exit\n") break;
+
+        socketWrite(clientSocket, "echo: {message}");
+    }
+
+    await socketWrite(clientSocket, "exit");
+    print "Closed client";
+    socketClose(clientSocket);
+}
+
+var server = createServer();
+serverListen(server, 3000);
+
+while (true) {
+    var clientSocket = await serverAccept(server);
+    print "Accepted client";
+    handleClient(clientSocket);
+}

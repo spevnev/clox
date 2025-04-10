@@ -1,0 +1,2 @@
+async fun p() { return 1; }
+fun f() { await p(); } // [ERROR] Cannot await outside of async function at 2:11.

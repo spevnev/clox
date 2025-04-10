@@ -368,6 +368,17 @@ static bool socket_close(Value *result, Value *args) {
     return true;
 }
 
+static bool string_length(Value *result, Value *args) {
+    if (!is_object_type(args[0], OBJ_STRING)) {
+        runtime_error("The first argument must be a string");
+        return false;
+    }
+    ObjString *string = (ObjString *) args[0].as.object;
+
+    *result = VALUE_NUMBER(string->length);
+    return true;
+}
+
 static NativeFunctionDef functions[] = {
     // clang-format off
     // time
@@ -385,6 +396,8 @@ static NativeFunctionDef functions[] = {
     { "socketRead",    2,     socket_read   },
     { "socketWrite",   2,     socket_write  },
     { "socketClose",   1,     socket_close  },
+    // string
+    { "stringLength",  1,     string_length },
     // clang-format on
 };
 

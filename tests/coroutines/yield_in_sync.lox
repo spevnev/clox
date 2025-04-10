@@ -1,0 +1,1 @@
+fun f() { yield; } // [ERROR] Cannot yield outside of async function at 1:11.

@@ -1,0 +1,26 @@
+var id = 1;
+async fun count(n) {
+    var current_id = id++;
+    for (var i = 0;i < n;i++) {
+        print "{current_id}. {i}";
+        yield;
+    }
+}
+
+count(5);
+count(2);
+count(3);
+
+// 1. 0
+// 2. 0
+// 3. 0
+// 1. 1
+// 2. 1
+/// 2 finishes
+// 3. 1
+// 1. 2
+// 3. 2
+/// 3 finishes
+// 1. 3
+// 1. 4
+/// 1 finishes
