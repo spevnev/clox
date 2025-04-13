@@ -1,1 +1,1 @@
-"str".foo; // [ERROR] Fields only exist on instances but found 'str' at 1:7.
+"str".foo; // [ERROR] Undefined field 'foo', strings only have length at 1:7.

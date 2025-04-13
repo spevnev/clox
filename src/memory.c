@@ -67,6 +67,7 @@ static void mark_vm_roots(void) {
     mark_coroutines(vm.active_head);
     mark_coroutines(vm.sleeping_head);
     mark_object((Object *) vm.init_string);
+    mark_object((Object *) vm.length_string);
     hashmap_mark_entries(&vm.globals);
 
     for (ObjUpvalue *upvalue = vm.open_upvalues; upvalue != NULL; upvalue = upvalue->next) {

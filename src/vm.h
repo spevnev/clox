@@ -56,7 +56,9 @@ typedef struct {
     HashMap strings;
     HashMap globals;
     ObjUpvalue *open_upvalues;
+    // Interned strings for comparison.
     ObjString *init_string;
+    ObjString *length_string;
     // Disabled while initializing VM.
     bool enable_gc;
     Object *objects;

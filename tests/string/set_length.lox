@@ -1,0 +1,1 @@
+"string".length = 10; // [ERROR] Cannot assign to length, it is immutable at 1:19.

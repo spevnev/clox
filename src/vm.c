@@ -630,39 +630,66 @@ static InterpretResult run(void) {
             } break;
             case OP_GET_FIELD: {
                 Value instance_value = stack_peek(0);
-                if (!is_object_type(instance_value, OBJ_INSTANCE)) {
+                ObjString *field = READ_STRING();
+
+                if (is_object_type(instance_value, OBJ_INSTANCE)) {
+                    ObjInstance *instance = (ObjInstance *) instance_value.as.object;
+
+                    Value value;
+                    if (hashmap_get(&instance->fields, field, &value)) {
+                        stack_pop();
+                        stack_push(value);
+                        break;
+                    }
+                    if (hashmap_get(&instance->class->methods, field, &value)) {
+                        ObjBoundMethod *bound_method = new_bound_method(instance_value, (ObjClosure *) value.as.object);
+                        stack_pop();
+                        stack_push(VALUE_OBJECT(bound_method));
+                        break;
+                    }
+
+                    runtime_error("Undefined field '%s'", field->cstr);
+                    return RESULT_RUNTIME_ERROR;
+                } else if (is_object_type(instance_value, OBJ_STRING)) {
+                    if (field != vm.length_string) {
+                        runtime_error("Undefined field '%s', strings only have length", field->cstr);
+                        return RESULT_RUNTIME_ERROR;
+                    }
+
+                    ObjString *string = (ObjString *) instance_value.as.object;
+                    stack_pop();
+                    stack_push(VALUE_NUMBER(string->length));
+                } else if (is_object_type(instance_value, OBJ_ARRAY)) {
+                    if (field != vm.length_string) {
+                        runtime_error("Undefined field '%s', arrays only have length", field->cstr);
+                        return RESULT_RUNTIME_ERROR;
+                    }
+
+                    ObjArray *array = (ObjArray *) instance_value.as.object;
+                    stack_pop();
+                    stack_push(VALUE_NUMBER(array->length));
+                } else {
                     runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
                     return RESULT_RUNTIME_ERROR;
                 }
-                ObjInstance *instance = (ObjInstance *) instance_value.as.object;
-                ObjString *field = READ_STRING();
-
-                Value value;
-                if (hashmap_get(&instance->fields, field, &value)) {
-                    stack_pop();
-                    stack_push(value);
-                    break;
-                }
-                if (hashmap_get(&instance->class->methods, field, &value)) {
-                    ObjBoundMethod *bound_method = new_bound_method(instance_value, (ObjClosure *) value.as.object);
-                    stack_pop();
-                    stack_push(VALUE_OBJECT(bound_method));
-                    break;
-                }
-
-                runtime_error("Undefined field '%s'", field->cstr);
-                return RESULT_RUNTIME_ERROR;
             } break;
             case OP_SET_FIELD: {
                 Value instance_value = stack_peek(1);
+                ObjString *field = READ_STRING();
                 if (!is_object_type(instance_value, OBJ_INSTANCE)) {
-                    runtime_error("Fields only exist on instances but found '%s'", value_to_temp_cstr(instance_value));
+                    if ((is_object_type(instance_value, OBJ_ARRAY) || is_object_type(instance_value, OBJ_STRING))
+                        && field == vm.length_string) {
+                        runtime_error("Cannot assign to length, it is immutable");
+                    } else {
+                        runtime_error("Fields only exist on instances but found '%s'",
+                                      value_to_temp_cstr(instance_value));
+                    }
                     return RESULT_RUNTIME_ERROR;
                 }
                 ObjInstance *instance = (ObjInstance *) instance_value.as.object;
 
                 Value value = stack_peek(0);
-                hashmap_set(&instance->fields, READ_STRING(), value);
+                hashmap_set(&instance->fields, field, value);
                 stack_popn(2);
                 stack_push(value);
             } break;
@@ -856,6 +883,7 @@ void init_vm(void) {
     if (vm.epoll_fd == -1) PANIC("Error in epoll_create: %s", strerror(errno));
     vm.next_gc = GC_INITIAL_THRESHOLD;
     vm.init_string = copy_string("init", 4);
+    vm.length_string = copy_string("length", 6);
 
     add_native_functions();
 }

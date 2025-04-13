@@ -12,7 +12,7 @@ async fun handleClient(client) {
 
     await socketWrite(client, "
 HTTP/1.1 200 OK
-Content-Length: {stringLength(content)}
+Content-Length: {content.length}
 Content-Type: text/plain; charset=utf-8
 
 {content}

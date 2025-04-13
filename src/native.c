@@ -370,21 +370,6 @@ static bool create_array(Value *result, Value *args) {
     return true;
 }
 
-static bool length(Value *result, Value *args) {
-    if (is_object_type(args[0], OBJ_STRING)) {
-        ObjString *string = (ObjString *) args[0].as.object;
-        *result = VALUE_NUMBER(string->length);
-        return true;
-    } else if (is_object_type(args[0], OBJ_ARRAY)) {
-        ObjArray *array = (ObjArray *) args[0].as.object;
-        *result = VALUE_NUMBER(array->length);
-        return true;
-    } else {
-        runtime_error("The first argument must be an array or a string");
-        return false;
-    }
-}
-
 static NativeFunctionDef functions[] = {
     // clang-format off
     // time
@@ -404,7 +389,6 @@ static NativeFunctionDef functions[] = {
     { "socketClose",   1,     socket_close  },
     // array
     { "Array",         2,     create_array  },
-    { "length",        1,     length        },
     // clang-format on
 };
 
