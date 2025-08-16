@@ -2,7 +2,6 @@
 #define CLOX_LEXER_H_
 
 #include "chunk.h"
-#include "common.h"
 
 typedef enum {
     // Operators

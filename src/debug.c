@@ -1,8 +1,10 @@
 #include "debug.h"
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include "chunk.h"
 #include "common.h"
+#include "object.h"
 #include "value.h"
 
 uint32_t disassemble_instr(const Chunk *chunk, uint32_t offset) {

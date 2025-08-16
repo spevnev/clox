@@ -2,8 +2,9 @@
 #define CLOX_ERROR_H_
 
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "chunk.h"
-#include "common.h"
 
 static inline void error_varg(Loc loc, const char *fmt, va_list args) {
     fprintf(stderr, "[ERROR] ");

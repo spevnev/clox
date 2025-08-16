@@ -1,7 +1,5 @@
 #include "value.h"
 #include <math.h>
-#include <string.h>
-#include "common.h"
 #include "error.h"
 #include "memory.h"
 #include "object.h"

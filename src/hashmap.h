@@ -1,7 +1,6 @@
 #ifndef CLOX_HASHMAP_H_
 #define CLOX_HASHMAP_H_
 
-#include "common.h"
 #include "value.h"
 
 typedef struct ObjString ObjString;

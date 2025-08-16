@@ -1,14 +1,15 @@
 #include "compiler.h"
 #include <assert.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 #include "chunk.h"
 #include "common.h"
-#include "debug.h"
 #include "error.h"
 #include "lexer.h"
 #include "memory.h"
 #include "object.h"
+#include "vm.h"
 
 typedef enum {
     PREC_NONE = 0,
@@ -487,7 +488,7 @@ static void binary(UNUSED(bool can_assign)) {
     }
 }
 
-static void and_(UNUSED(bool can_assign)) {
+static void and(UNUSED(bool can_assign)) {
     // Jump over second operand if the first one is false (short-circuiting).
     uint32_t jump = emit_jump(OP_JUMP_IF_FALSE);
 
@@ -499,8 +500,8 @@ static void and_(UNUSED(bool can_assign)) {
     patch_jump(jump);
 }
 
-static void or_(UNUSED(bool can_assign)) {
-    // Same logic as in `and_` but reversed.
+static void or(UNUSED(bool can_assign)) {
+    // Same logic as in `and` but reversed.
     uint32_t jump = emit_jump(OP_JUMP_IF_TRUE);
     emit_byte(OP_POP);
     parse_precedence(PREC_OR);
@@ -522,7 +523,7 @@ static void conditional(UNUSED(bool can_assign)) {
 
 static void call(UNUSED(bool can_assign)) { emit_byte2(OP_CALL, args()); }
 
-static void index(bool can_assign) {
+static void index_op(bool can_assign) {
     expression();
     expect(TOKEN_RIGHT_BRACKET, "Unclosed '[', expected ']' after index");
 
@@ -622,11 +623,11 @@ static const ParseRule rules[TOKEN_COUNT] = {
     [TOKEN_GREATER_EQUAL]  = { NULL,     binary,      PREC_COMPARISON  },
     [TOKEN_LESS]           = { NULL,     binary,      PREC_COMPARISON  },
     [TOKEN_LESS_EQUAL]     = { NULL,     binary,      PREC_COMPARISON  },
-    [TOKEN_AND]            = { NULL,     and_,        PREC_AND         },
-    [TOKEN_OR]             = { NULL,     or_,         PREC_OR          },
+    [TOKEN_AND]            = { NULL,     and,         PREC_AND         },
+    [TOKEN_OR]             = { NULL,     or,          PREC_OR          },
     [TOKEN_QUESTION]       = { NULL,     conditional, PREC_CONDITIONAL },
     [TOKEN_LEFT_PAREN]     = { grouping, call,        PREC_CALL        },
-    [TOKEN_LEFT_BRACKET]   = { array,    index,       PREC_CALL        },
+    [TOKEN_LEFT_BRACKET]   = { array,    index_op,    PREC_CALL        },
     [TOKEN_DOT]            = { NULL,     dot,         PREC_CALL        },
     // clang-format on
 };

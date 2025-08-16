@@ -10,7 +10,6 @@
 #include <time.h>
 #include <unistd.h>
 #include "common.h"
-#include "error.h"
 #include "object.h"
 #include "value.h"
 #include "vm.h"

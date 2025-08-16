@@ -1,7 +1,6 @@
 #ifndef CLOX_CHUNK_H_
 #define CLOX_CHUNK_H_
 
-#include "common.h"
 #include "value.h"
 
 typedef enum {

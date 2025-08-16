@@ -3,9 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
-#include "chunk.h"
-#include "common.h"
-#include "debug.h"
 #include "error.h"
 #include "vm.h"
 

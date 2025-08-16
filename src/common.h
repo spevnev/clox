@@ -4,8 +4,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #define UNUSED(parameter) __attribute__((unused)) parameter##_UNUSED
 

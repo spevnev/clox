@@ -2,7 +2,6 @@
 #include "vm.h"
 #include <assert.h>
 #include <errno.h>
-#include <math.h>
 #include <stdarg.h>
 #include <string.h>
 #include <sys/epoll.h>
@@ -12,7 +11,6 @@
 #include "chunk.h"
 #include "common.h"
 #include "compiler.h"
-#include "debug.h"
 #include "error.h"
 #include "memory.h"
 #include "native.h"
@@ -718,7 +716,7 @@ static InterpretResult run(void) {
 #ifdef INLINE_CACHING
                 if (memcmp(cache_ip, &instance->class->id, sizeof(cache_id_t)) == 0) {
                     ObjClosure *cached_method;
-                    memcpy(&cached_method, cache_ip + sizeof(cache_id_t), sizeof(cached_method));
+                    memcpy(&cached_method, cache_ip + sizeof(cache_id_t), sizeof(void *));
                     assert(cached_method != NULL);
 
                     if (!call(cached_method, arg_num)) return RESULT_RUNTIME_ERROR;
@@ -762,7 +760,7 @@ static InterpretResult run(void) {
                 vm.coroutine->frame->ip += sizeof(void *);
 
                 ObjClosure *cached_method;
-                memcpy(&cached_method, cache_ip, sizeof(cached_method));
+                memcpy(&cached_method, cache_ip, sizeof(void *));
                 if (cached_method != NULL) {
                     if (!call(cached_method, arg_num)) return RESULT_RUNTIME_ERROR;
                     break;

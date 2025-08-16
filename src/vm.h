@@ -2,7 +2,6 @@
 #define CLOX_VM_H_
 
 #include <sys/epoll.h>
-#include "chunk.h"
 #include "compiler.h"
 #include "hashmap.h"
 #include "object.h"

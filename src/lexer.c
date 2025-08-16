@@ -1,6 +1,5 @@
 #include "lexer.h"
 #include <string.h>
-#include "common.h"
 
 static Lexer l = {0};
 

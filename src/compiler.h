@@ -1,7 +1,6 @@
 #ifndef CLOX_COMPILER_H_
 #define CLOX_COMPILER_H_
 
-#include "common.h"
 #include "object.h"
 
 #define CONSTANTS_SIZE (MAX_OPERAND + 1)

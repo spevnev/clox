@@ -1,7 +1,6 @@
 #include "hashmap.h"
 #include <assert.h>
 #include <string.h>
-#include "common.h"
 #include "memory.h"
 #include "object.h"
 #include "value.h"
@@ -30,8 +29,7 @@ static void grow_map(HashMap *map) {
     uint32_t new_capacity = MAP_GROW_CAPACITY(map->capacity);
     Entry *new_entries = ARRAY_ALLOC(new_entries, new_capacity);
 
-    // Entries are initialized with zeroes, so value type of empty entry must be zero.
-    static_assert(VAL_NIL == 0);
+    static_assert(VAL_NIL == 0, "Nil type must be 0");
     memset(new_entries, 0, sizeof(*map->entries) * new_capacity);
 
     // Recount to exclude tombstones.
