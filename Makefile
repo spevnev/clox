@@ -1,7 +1,10 @@
-CC := gcc
+SRC_DIR := src
+OUT_DIR := build
 
-CFLAGS  := -O2 -std=c17 -Wall -Wextra -pedantic -Isrc -MMD -MP
-LDFLAGS :=
+BIN_NAME := clox
+BIN_PATH := $(OUT_DIR)/$(BIN_NAME)
+
+CFLAGS := -std=c17 -Wall -Wextra -pedantic -MMD -MP -O2
 
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g3 -fsanitize=address,leak,undefined
@@ -11,32 +14,22 @@ ifeq ($(TEST), 1)
 	CFLAGS += -fsanitize=address,leak,undefined -D HIDE_STACKTRACE -D DEBUG_STRESS_GC
 endif
 
-SRC_DIR := src
-OUT_DIR := build
-OBJ_DIR := $(OUT_DIR)/$(SRC_DIR)
+SRCS := $(wildcard $(SRC_DIR)/*.c)
+OBJS := $(patsubst %.c, $(OUT_DIR)/%.o, $(SRCS))
+DEPS := $(OBJS:.o=.d)
 
-BIN_NAME := clox
-BIN_PATH := $(OUT_DIR)/$(BIN_NAME)
+.PHONY: all clean
+all: $(BIN_PATH)
 
-SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
-OBJS := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SRCS))
-DEPS := $(patsubst %.o, %.d, $(OBJS))
-
-.PHONY: all
-all: build
-
-.PHONY: build
-build: $(BIN_PATH)
-
-.PHONY: clean
 clean:
 	rm -rf $(OUT_DIR)
 
 $(BIN_PATH): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -o $@ -c $<
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+
+$(OUT_DIR)/%.o: %.c
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 -include $(DEPS)
