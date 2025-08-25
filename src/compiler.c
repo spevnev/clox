@@ -1132,6 +1132,7 @@ static void class_decl(void) {
         FunctionType fun_type = FUN_METHOD;
         if (p.previous.length == 4 && memcmp(p.previous.start, "init", 4) == 0) fun_type = FUN_INITIALIZER;
         function(fun_type);
+        if (p.is_panicking) break;
 
         emit_byte2(OP_METHOD, name);
     }

@@ -1,0 +1,4 @@
+class Foo {
+    method(a, b, true) {} // [ERROR] Expected parameter name at 2:18.
+                          // [ERROR] Expected an expression but found '}' at 4:1.
+}
