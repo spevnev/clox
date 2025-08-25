@@ -5,6 +5,7 @@
 #include <string.h>
 #include "chunk.h"
 #include "common.h"
+#include "debug.h"
 #include "error.h"
 #include "lexer.h"
 #include "memory.h"
